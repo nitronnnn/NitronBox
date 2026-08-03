@@ -1,0 +1,48 @@
+import type { ConnectionPoint } from './types';
+
+export const initialConnectionPoints: ConnectionPoint[] = [
+  {
+    id: 'openai',
+    name: 'OpenAI',
+    detail: 'Official API',
+    symbol: 'sparkles',
+    baseUrl: 'https://api.openai.com/v1',
+    keyHint: 'sk-...',
+    health: 'online',
+    latencyMs: 42,
+    modelCount: null,
+  },
+  {
+    id: 'anthropic',
+    name: 'Anthropic',
+    detail: 'Official API',
+    symbol: 'brain',
+    baseUrl: 'https://api.anthropic.com/v1',
+    keyHint: 'sk-ant-...',
+    health: 'online',
+    latencyMs: 56,
+    modelCount: null,
+  },
+  {
+    id: 'gemini',
+    name: 'Google Gemini',
+    detail: 'Official API',
+    symbol: 'gem',
+    baseUrl: 'https://generativelanguage.googleapis.com/v1beta',
+    keyHint: 'AIza...',
+    health: 'online',
+    latencyMs: 48,
+    modelCount: null,
+  },
+  {
+    id: 'custom',
+    name: 'Custom endpoint',
+    detail: 'OpenAI-compatible',
+    symbol: 'server',
+    baseUrl: '',
+    keyHint: 'API key',
+    health: 'degraded',
+    latencyMs: null,
+    modelCount: null,
+  },
+];

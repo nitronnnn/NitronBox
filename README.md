@@ -1,19 +1,26 @@
 # NitronBox
 
-AI chat for Android rebuilt from scratch with Flutter.
+Premium connection onboarding rebuilt from scratch with React Native and TypeScript.
 
 ## Stack
 
-- Flutter and Dart
-- Riverpod for state management
-- Dio for provider APIs and streamed responses
-- flutter_markdown for model output
-- No WebView, React, Capacitor or Jetpack Compose UI
+- Expo / React Native
+- TypeScript
+- React Native Reanimated
+- Lucide React Native
+- Supabase-ready realtime source abstraction
 
-## Build
+## Run
 
 ```bash
-flutter pub get
-flutter analyze
-flutter build apk --debug
+npm install
+npx expo start
+```
+
+## Android
+
+```bash
+npx expo prebuild --clean --platform android
+cd android
+./gradlew assembleDebug
 ```

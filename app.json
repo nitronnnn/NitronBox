@@ -1,0 +1,27 @@
+{
+  "expo": {
+    "name": "NitronBox",
+    "slug": "nitronbox",
+    "version": "8.0.0",
+    "orientation": "portrait",
+    "scheme": "nitronbox",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "app.nitronbox.mobile"
+    },
+    "android": {
+      "package": "app.nitronbox.mobile",
+      "adaptiveIcon": {
+        "backgroundColor": "#000000"
+      },
+      "edgeToEdgeEnabled": true,
+      "predictiveBackGestureEnabled": true
+    },
+    "plugins": ["expo-router"],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
