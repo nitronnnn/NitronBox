@@ -1,19 +1,11 @@
-# NitronBox
+# NitronBox Liquid Glass
 
-AI chat for Android rebuilt from scratch with Flutter.
+Native Jetpack Compose demonstration of a reusable `LiquidGlassCard` built with:
 
-## Stack
+- `com.github.skydoves:cloudy:0.2.0`
+- `dev.chrisbanes.haze:haze:0.7.0`
+- Coil Compose
 
-- Flutter and Dart
-- Riverpod for state management
-- Dio for provider APIs and streamed responses
-- flutter_markdown for model output
-- No WebView, React, Capacitor or Jetpack Compose UI
+The background list uses `Modifier.haze(state)`. The floating card uses `Modifier.hazeChild(state)` and a dedicated decorative layer with `Modifier.cloudy(radius = 25)`, keeping card content sharp.
 
-## Build
-
-```bash
-flutter pub get
-flutter analyze
-flutter build apk --debug
-```
+> Cloudy 0.2.0 is published as `com.github.skydoves:cloudy:0.2.0`. The requested `io.github.skydoves` coordinate does not exist in Maven Central.

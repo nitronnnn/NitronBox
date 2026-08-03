@@ -1,14 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="LaunchTheme" parent="@android:style/Theme.Black.NoTitleBar">
-        <item name="android:windowSplashScreenBackground">#07090E</item>
+    <style name="AppTheme" parent="android:style/Theme.Material.NoActionBar">
+        <item name="android:fontFamily">sans</item>
         <item name="android:windowLightStatusBar">false</item>
-        <item name="android:statusBarColor">#07090E</item>
-        <item name="android:navigationBarColor">#07090E</item>
-    </style>
-    <style name="NormalTheme" parent="@android:style/Theme.Black.NoTitleBar">
-        <item name="android:windowBackground">#07090E</item>
-        <item name="android:statusBarColor">#07090E</item>
-        <item name="android:navigationBarColor">#07090E</item>
+        <item name="android:statusBarColor">#071018</item>
+        <item name="android:navigationBarColor">#071018</item>
+        <item name="android:windowActionModeOverlay">true</item>
     </style>
 </resources>
