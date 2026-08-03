@@ -1,13 +1,15 @@
 {
   "name": "nitronbox",
-  "version": "8.0.0",
+  "version": "8.0.1",
   "private": true,
   "main": "expo-router/entry",
   "scripts": {
     "start": "expo start",
     "android": "expo run:android",
+    "android:release": "expo prebuild --clean --platform android --no-install && cd android && gradlew assembleRelease",
     "typecheck": "tsc --noEmit",
-    "test": "jest --runInBand"
+    "test": "jest --runInBand",
+    "ios": "expo run:ios"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.57.4",
@@ -38,7 +40,12 @@
   },
   "jest": {
     "preset": "jest-expo",
-    "setupFilesAfterEnv": ["<rootDir>/jest.setup.ts"],
-    "testPathIgnorePatterns": ["/node_modules/", "/android/"]
+    "setupFilesAfterEnv": [
+      "<rootDir>/jest.setup.ts"
+    ],
+    "testPathIgnorePatterns": [
+      "/node_modules/",
+      "/android/"
+    ]
   }
 }

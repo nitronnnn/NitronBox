@@ -2,7 +2,7 @@
   "expo": {
     "name": "NitronBox",
     "slug": "nitronbox",
-    "version": "8.0.0",
+    "version": "8.0.1",
     "orientation": "portrait",
     "scheme": "nitronbox",
     "userInterfaceStyle": "automatic",
@@ -19,7 +19,7 @@
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": true
     },
-    "plugins": ["expo-router"],
+    "plugins": ["expo-router", "./plugins/withReleaseBundle"],
     "experiments": {
       "typedRoutes": true
     }

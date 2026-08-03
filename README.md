@@ -20,7 +20,24 @@ npx expo start
 ## Android
 
 ```bash
-npx expo prebuild --clean --platform android
+npm ci
+npx expo prebuild --clean --platform android --no-install
 cd android
-./gradlew assembleDebug
+./gradlew assembleRelease
+```
+
+The standalone APK is written to:
+
+```text
+android/app/build/outputs/apk/release/app-release.apk
+```
+
+This release variant embeds `assets/index.android.bundle` and all Metro assets. It does not need
+Metro, USB debugging, `adb reverse`, Wi-Fi access to the development machine, or a background
+terminal process.
+
+To build and install the same release variant directly through Expo tooling:
+
+```bash
+npx expo run:android --variant release
 ```
