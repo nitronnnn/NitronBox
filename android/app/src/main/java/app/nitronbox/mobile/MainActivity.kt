@@ -108,14 +108,18 @@ private fun NitronBoxApp(vm: MainViewModel = viewModel()) {
 
     if (sheet != null) {
         ModalBottomSheet(
-            onDismissRequest = { sheet = null }, containerColor = Color(0xF0151D2D), contentColor = TextPrimary,
+            onDismissRequest = { sheet = null }, containerColor = Color.Transparent, contentColor = TextPrimary,
             scrimColor = Color(0xB0000309), dragHandle = { BottomSheetDefaults.DragHandle(color = Color(0xFF52617D)) },
         ) {
-            when (sheet) {
-                Sheet.PROVIDERS -> ProviderSheet(state.provider, onChoose = { vm.chooseProvider(it); sheet = Sheet.SETTINGS })
-                Sheet.MODELS -> ModelSheet(state, onSelect = { vm.chooseModel(it); sheet = null }, onRefresh = vm::loadModels)
-                Sheet.SETTINGS -> SettingsSheet(state, vm, openProviders = { sheet = Sheet.PROVIDERS }, loadModels = { vm.loadModels { sheet = Sheet.MODELS } }, close = { sheet = null })
-                null -> Unit
+            LiquidGlassSurface(Modifier.fillMaxWidth(), RoundedCornerShape(topStart = 30.dp, topEnd = 30.dp), blurRadius = 24.dp) {
+                Column {
+                    when (sheet) {
+                        Sheet.PROVIDERS -> ProviderSheet(state.provider, onChoose = { vm.chooseProvider(it); sheet = Sheet.SETTINGS })
+                        Sheet.MODELS -> ModelSheet(state, onSelect = { vm.chooseModel(it); sheet = null }, onRefresh = vm::loadModels)
+                        Sheet.SETTINGS -> SettingsSheet(state, vm, openProviders = { sheet = Sheet.PROVIDERS }, loadModels = { vm.loadModels { sheet = Sheet.MODELS } }, close = { sheet = null })
+                        null -> Unit
+                    }
+                }
             }
         }
     }
@@ -132,11 +136,7 @@ private fun AuroraBackground() {
 
 @Composable
 private fun Glass(modifier: Modifier = Modifier, shape: RoundedCornerShape = RoundedCornerShape(24.dp), content: @Composable BoxScope.() -> Unit) {
-    Box(
-        modifier.background(Brush.linearGradient(listOf(Color(0x2ADDF1FF), Color(0x127B96C5), Color(0x197F67CB))), shape)
-            .border(1.dp, Brush.linearGradient(listOf(Color(0x55E9F7FF), Color(0x1888A5D7), Color(0x358E7BFF))), shape)
-            .clip(shape), content = content,
-    )
+    LiquidGlassSurface(modifier = modifier, shape = shape, content = content)
 }
 
 @Composable
@@ -234,13 +234,15 @@ private fun ErrorPill(message: String, close: () -> Unit) {
 
 @Composable
 private fun Drawer(state: UiState, vm: MainViewModel, close: () -> Unit) {
-    ModalDrawerSheet(Modifier.width(310.dp), drawerContainerColor = Color(0xF0121928), drawerContentColor = TextPrimary) {
+    ModalDrawerSheet(Modifier.width(310.dp), drawerContainerColor = Color.Transparent, drawerContentColor = TextPrimary) {
+        LiquidGlassSurface(Modifier.fillMaxSize(), RoundedCornerShape(topEnd = 28.dp, bottomEnd = 28.dp), blurRadius = 24.dp) {
         Column(Modifier.fillMaxSize().statusBarsPadding().padding(14.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) { NitronLogo(42.dp); Spacer(Modifier.width(9.dp)); Column(Modifier.weight(1f)) { Text("NitronBox", fontWeight = FontWeight.Bold); Text("NATIVE AI WORKSPACE", color = TextMuted, fontSize = 8.sp) }; NativeIcon(Icons.Outlined.Close, close) }
             Button(onClick = { vm.newChat(); close() }, Modifier.fillMaxWidth().padding(vertical = 20.dp), shape = RoundedCornerShape(15.dp), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF5E6DCE))) { Icon(Icons.Outlined.Add, null); Spacer(Modifier.width(7.dp)); Text("Новый чат", fontSize = 11.sp) }
             Text("НЕДАВНИЕ", color = Color(0xFF687B9E), fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
             LazyColumn(Modifier.weight(1f).padding(top = 8.dp)) { items(state.conversations, key = { it.id }) { chat -> Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(if (chat.id == state.activeId) Color(0x176CA8FF) else Color.Transparent).clickable { vm.openChat(chat.id); close() }.padding(10.dp), verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Outlined.ChatBubbleOutline, null, Modifier.size(16.dp), tint = TextMuted); Text(chat.title, Modifier.weight(1f).padding(horizontal = 8.dp), maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 10.sp); Icon(Icons.Outlined.DeleteOutline, null, Modifier.size(17.dp).clickable { vm.deleteChat(chat.id) }, tint = Color(0xFF6E7E9A)) } } }
             Text("API-ключи хранятся только в памяти приложения", color = Color(0xFF5E708E), fontSize = 8.sp, lineHeight = 13.sp)
+        }
         }
     }
 }
@@ -290,7 +292,7 @@ private fun SettingsSheet(state: UiState, vm: MainViewModel, openProviders: () -
 private fun ProviderBadge(provider: Provider, size: androidx.compose.ui.unit.Dp) { Box(Modifier.size(size).background(Color(provider.color), RoundedCornerShape(size * .34f)).border(1.dp, Color.White.copy(.18f), RoundedCornerShape(size * .34f)), contentAlignment = Alignment.Center) { Text(provider.badge, fontSize = (size.value * .27f).sp, fontWeight = FontWeight.Bold, color = Color.White) } }
 
 @Composable
-private fun NativeIcon(icon: ImageVector, action: () -> Unit, size: androidx.compose.ui.unit.Dp = 42.dp) { IconButton(onClick = action, modifier = Modifier.size(size).clip(RoundedCornerShape(14.dp)).background(Color(0x0FFFFFFF))) { Icon(icon, null, tint = Color(0xFFB9C7DF), modifier = Modifier.size(20.dp)) } }
+private fun NativeIcon(icon: ImageVector, action: () -> Unit, size: androidx.compose.ui.unit.Dp = 42.dp) { IconButton(onClick = action, modifier = Modifier.size(size).liquidGlass(RoundedCornerShape(14.dp)).background(Color(0x0FFFFFFF))) { Icon(icon, null, tint = Color(0xFFB9C7DF), modifier = Modifier.size(20.dp)) } }
 
 @Composable
 private fun FilledIcon(icon: ImageVector, action: () -> Unit, enabled: Boolean) { IconButton(onClick = action, enabled = enabled, modifier = Modifier.size(39.dp).clip(RoundedCornerShape(13.dp)).background(if (enabled) Brush.linearGradient(listOf(Cyan, Violet)) else SolidColor(Color(0x334F6080)))) { Icon(icon, null, tint = Color.White, modifier = Modifier.size(19.dp)) } }
