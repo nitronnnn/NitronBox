@@ -1,5 +1,6 @@
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import { Text } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { ConnectionScreen } from './ConnectionScreen';
 import { ConnectionProvider, useConnection } from './store';
@@ -18,8 +19,15 @@ describe('ConnectionScreen', () => {
   it('selects a provider, stores its key, and connects', async () => {
     const screen = render(
       <ConnectionProvider gateway={gateway}>
-        <ConnectionScreen />
-        <StateProbe />
+        <SafeAreaProvider
+          initialMetrics={{
+            frame: { x: 0, y: 0, width: 390, height: 844 },
+            insets: { top: 47, left: 0, right: 0, bottom: 34 },
+          }}
+        >
+          <ConnectionScreen />
+          <StateProbe />
+        </SafeAreaProvider>
       </ConnectionProvider>,
     );
 
