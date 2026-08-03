@@ -1,43 +1,31 @@
 plugins {
-    id 'com.android.application'
-    id 'org.jetbrains.kotlin.android'
-    id 'org.jetbrains.kotlin.plugin.compose'
+    id "com.android.application"
+    id "kotlin-android"
+    id "dev.flutter.flutter-gradle-plugin"
 }
 
 android {
-    namespace 'app.nitronbox.mobile'
-    compileSdk 35
-
-    defaultConfig {
-        applicationId 'app.nitronbox.mobile'
-        minSdk 23
-        targetSdk 35
-        versionCode 7
-        versionName '7.0'
-    }
-
-    buildFeatures { compose true }
+    namespace = "app.nitronbox.mobile"
+    compileSdk = flutter.compileSdkVersion
+    ndkVersion = flutter.ndkVersion
 
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_17
-        targetCompatibility JavaVersion.VERSION_17
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
-    kotlinOptions { jvmTarget = '17' }
+    kotlinOptions { jvmTarget = JavaVersion.VERSION_17.toString() }
+
+    defaultConfig {
+        applicationId = "app.nitronbox.mobile"
+        minSdk = 23
+        targetSdk = flutter.targetSdkVersion
+        versionCode = flutter.versionCode
+        versionName = flutter.versionName
+    }
+
+    buildTypes {
+        release { signingConfig = signingConfigs.debug }
+    }
 }
 
-dependencies {
-    implementation platform('androidx.compose:compose-bom:2024.06.00')
-    implementation 'androidx.activity:activity-compose:1.9.0'
-    implementation 'androidx.compose.ui:ui'
-    implementation 'androidx.compose.ui:ui-tooling-preview'
-    implementation 'androidx.compose.foundation:foundation'
-    implementation 'androidx.compose.material3:material3'
-    implementation 'androidx.compose.material:material-icons-extended'
-
-    // Cloudy 0.2.0 is published under com.github.skydoves, not io.github.skydoves.
-    implementation 'com.github.skydoves:cloudy:0.2.0'
-    implementation 'dev.chrisbanes.haze:haze:0.7.0'
-    implementation 'io.coil-kt:coil-compose:2.7.0'
-
-    debugImplementation 'androidx.compose.ui:ui-tooling'
-}
+flutter { source = "../.." }
