@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Prism AI</string>
+    <string name="title_activity_main">Prism AI</string>
+    <string name="package_name">com.prism.ai</string>
+    <string name="custom_url_scheme">com.prism.ai</string>
+</resources>

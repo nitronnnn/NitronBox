@@ -1,0 +1,8 @@
+{
+  "appId": "com.prism.ai",
+  "appName": "Prism AI",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  }
+}
