@@ -14,6 +14,7 @@ import java.util.concurrent.atomic.AtomicLong
 
 data class UiState(
     val provider: Provider = Providers.first(),
+    val apiKeys: Map<String, String> = emptyMap(),
     val model: String = "",
     val baseUrl: String = "",
     val system: String = "",
@@ -29,12 +30,18 @@ data class UiState(
 class MainViewModel : ViewModel() {
     var state by mutableStateOf(UiState()); private set
     private val api = ApiClient()
-    private val keys = mutableMapOf<String, String>()
     private val ids = AtomicLong(System.currentTimeMillis())
     private var job: Job? = null
 
-    fun key() = keys[state.provider.id].orEmpty()
-    fun setKey(value: String) { keys[state.provider.id] = value; state = state.copy(models = emptyList(), model = "") }
+    fun key() = state.apiKeys[state.provider.id].orEmpty()
+    fun setKey(value: String) {
+        state = state.copy(
+            apiKeys = state.apiKeys + (state.provider.id to value),
+            models = emptyList(),
+            model = "",
+            error = "",
+        )
+    }
     fun chooseProvider(value: Provider) { state = state.copy(provider = value, model = "", models = emptyList(), baseUrl = if (value.custom) state.baseUrl else "", error = "") }
     fun chooseModel(value: String) { state = state.copy(model = value) }
     fun setBaseUrl(value: String) { state = state.copy(baseUrl = value, models = emptyList(), model = "") }
