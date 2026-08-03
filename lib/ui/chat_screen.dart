@@ -84,7 +84,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 _Header(
                   state: state,
                   menu: () => scaffoldKey.currentState?.openDrawer(),
-                  model: () => showModels(context, ref),
+                  model: () => showConnection(context, ref, openModels: true),
                   settings: () => showConnection(context, ref),
                   newChat: ref.read(chatProvider.notifier).newChat,
                 ),
@@ -92,7 +92,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                   child: messages.isEmpty
                       ? _Welcome(
                           state: state,
-                          connect: () => showModels(context, ref),
+                          connect: () => showConnection(context, ref),
                           prompt: (value) => ref.read(chatProvider.notifier).send(value),
                         )
                       : _Messages(messages: messages, controller: scroll, streaming: state.streaming),

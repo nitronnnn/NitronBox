@@ -20,6 +20,7 @@ jobs:
           cache: true
       - run: flutter pub get
       - run: flutter analyze
+      - run: flutter test
       - run: flutter build apk --debug
       - name: Rename APK
         run: cp build/app/outputs/flutter-apk/app-debug.apk NitronBox-${GITHUB_REF_NAME}.apk

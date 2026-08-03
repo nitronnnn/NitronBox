@@ -1,7 +1,7 @@
 name: nitronbox
 description: A polished multi-provider AI chat for Android.
 publish_to: none
-version: 6.1.0+8
+version: 6.2.0+9
 
 environment:
   sdk: '>=3.4.0 <4.0.0'
@@ -15,6 +15,7 @@ dependencies:
   shared_preferences: ^2.5.3
   google_fonts: ^6.2.1
   url_launcher: ^6.3.1
+  liquid_glass_renderer: 0.2.0-dev.4
 
 dev_dependencies:
   flutter_test:

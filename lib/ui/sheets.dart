@@ -5,103 +5,122 @@ import '../core/chat_state.dart';
 import '../core/models.dart';
 import 'design.dart';
 
-Future<void> showProviders(BuildContext context, WidgetRef ref) async {
-  final selected = await showModalBottomSheet<AiProvider>(
-    context: context,
-    isScrollControlled: true,
-    backgroundColor: Colors.transparent,
-    builder: (_) => const _ProviderSheet(),
-  );
-  if (selected == null) return;
-  ref.read(chatProvider.notifier).provider(selected);
-  if (context.mounted) await showConnection(context, ref);
-}
-
-Future<void> showModels(BuildContext context, WidgetRef ref) async {
-  final state = ref.read(chatProvider);
-  if (state.key.isEmpty || (state.provider.custom && state.baseUrl.isEmpty)) {
-    await showConnection(context, ref);
-    return;
-  }
-  if (state.models.isEmpty) {
-    final loaded = await ref.read(chatProvider.notifier).loadModels();
-    if (!loaded || !context.mounted) return;
-  }
-  if (!context.mounted) return;
-  await showModalBottomSheet<void>(
-    context: context,
-    isScrollControlled: true,
-    backgroundColor: Colors.transparent,
-    builder: (_) => const _ModelSheet(),
-  );
-}
-
-Future<void> showConnection(BuildContext context, WidgetRef ref) =>
+Future<void> showConnection(
+  BuildContext context,
+  WidgetRef ref, {
+  bool openModels = false,
+}) =>
     showModalBottomSheet<void>(
       context: context,
+      useRootNavigator: true,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => const _ConnectionSheet(),
+      barrierColor: Colors.black.withValues(alpha: .72),
+      builder: (_) => _ConnectionSheet(openModels: openModels),
     );
 
-class _SheetShell extends StatelessWidget {
-  const _SheetShell({
-    required this.title,
-    required this.subtitle,
-    required this.child,
-  });
+class _ConnectionSheet extends ConsumerStatefulWidget {
+  const _ConnectionSheet({required this.openModels});
+  final bool openModels;
 
-  final String title;
-  final String subtitle;
-  final Widget child;
+  @override
+  ConsumerState<_ConnectionSheet> createState() => _ConnectionSheetState();
+}
+
+class _ConnectionSheetState extends ConsumerState<_ConnectionSheet> {
+  late bool choosingModel = widget.openModels;
+  bool keyVisible = false;
+  String search = '';
 
   @override
   Widget build(BuildContext context) {
+    final state = ref.watch(chatProvider);
+    final controller = ref.read(chatProvider.notifier);
     final media = MediaQuery.of(context);
     final availableHeight = media.size.height - media.viewInsets.bottom;
+    final filteredModels = state.models
+        .where(
+          (model) => '${model.name} ${model.id}'
+              .toLowerCase()
+              .contains(search.toLowerCase()),
+        )
+        .toList();
+
     return Padding(
       padding: EdgeInsets.only(bottom: media.viewInsets.bottom),
       child: Glass(
-        radius: 28,
-        blur: 24,
+        radius: 30,
+        blur: 7,
         child: SafeArea(
           top: false,
           child: SizedBox(
-            height: (availableHeight * .86).clamp(320.0, 720.0),
+            height: (availableHeight * .9).clamp(390.0, 760.0),
             child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Center(
-                  child: Container(
-                    width: 38,
-                    height: 4,
-                    margin: const EdgeInsets.only(top: 10, bottom: 20),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF495361),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                  ),
-                ),
+                const _SheetHandle(),
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: Text(
-                    title,
-                    style: const TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: -.6,
-                    ),
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              choosingModel ? 'Выбор модели' : 'Подключение',
+                              style: const TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: -.6,
+                              ),
+                            ),
+                            Text(
+                              state.provider.name,
+                              style: const TextStyle(color: muted, fontSize: 11),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (choosingModel)
+                        RoundButton(
+                          icon: Icons.arrow_back_rounded,
+                          onTap: () => setState(() => choosingModel = false),
+                        ),
+                    ],
                   ),
                 ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 4, 20, 16),
-                  child: Text(
-                    subtitle,
-                    style: const TextStyle(color: muted, fontSize: 11),
+                Expanded(
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 180),
+                    child: choosingModel
+                        ? _ModelPicker(
+                            key: const ValueKey('models'),
+                            state: state,
+                            models: filteredModels,
+                            onSearch: (value) => setState(() => search = value),
+                            onSelect: (model) {
+                              controller.model(model.id);
+                              Navigator.pop(context);
+                            },
+                            onRefresh: () => controller.loadModels(),
+                          )
+                        : _ConnectionForm(
+                            key: const ValueKey('connection'),
+                            state: state,
+                            controller: controller,
+                            keyVisible: keyVisible,
+                            toggleKey: () => setState(() => keyVisible = !keyVisible),
+                            selectProvider: controller.provider,
+                            openModels: () async {
+                              if (state.models.isEmpty) {
+                                final loaded = await controller.loadModels();
+                                if (!loaded || !mounted) return;
+                              }
+                              setState(() => choosingModel = true);
+                            },
+                          ),
                   ),
                 ),
-                Expanded(child: child),
               ],
             ),
           ),
@@ -111,110 +130,234 @@ class _SheetShell extends StatelessWidget {
   }
 }
 
-class _ProviderSheet extends ConsumerWidget {
-  const _ProviderSheet();
+class _SheetHandle extends StatelessWidget {
+  const _SheetHandle();
+  @override
+  Widget build(BuildContext context) => Center(
+        child: Container(
+          width: 38,
+          height: 4,
+          margin: const EdgeInsets.only(top: 10, bottom: 18),
+          decoration: BoxDecoration(
+            color: const Color(0xFF596675),
+            borderRadius: BorderRadius.circular(4),
+          ),
+        ),
+      );
+}
+
+class _ConnectionForm extends StatelessWidget {
+  const _ConnectionForm({
+    super.key,
+    required this.state,
+    required this.controller,
+    required this.keyVisible,
+    required this.toggleKey,
+    required this.selectProvider,
+    required this.openModels,
+  });
+
+  final ChatState state;
+  final ChatController controller;
+  final bool keyVisible;
+  final VoidCallback toggleKey;
+  final ValueChanged<AiProvider> selectProvider;
+  final VoidCallback openModels;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final current = ref.watch(chatProvider).provider;
-    return _SheetShell(
-      title: 'Провайдеры',
-      subtitle: 'Выберите API для подключения',
-      child: ListView.separated(
-        shrinkWrap: true,
-        padding: const EdgeInsets.fromLTRB(14, 0, 14, 24),
-        itemCount: providers.length,
-        separatorBuilder: (_, __) => const SizedBox(height: 7),
-        itemBuilder: (context, index) {
-          final provider = providers[index];
-          final active = provider.id == current.id;
-          return Material(
-            color: active
-                ? const Color(0xFF202B37)
-                : const Color(0xFF131922),
-            borderRadius: BorderRadius.circular(16),
-            child: InkWell(
-              onTap: () => Navigator.pop(context, provider),
-              borderRadius: BorderRadius.circular(16),
-              child: Container(
-                height: 62,
-                padding: const EdgeInsets.symmetric(horizontal: 13),
-                decoration: BoxDecoration(
-                  border: Border.all(
-                    color: active ? const Color(0xFF3A5667) : line,
-                  ),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Row(
-                  children: [
-                    ProviderBadge(provider),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            provider.name,
-                            style: const TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
+  Widget build(BuildContext context) => ListView(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 28),
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+        children: [
+          const _Label('Провайдер'),
+          const SizedBox(height: 8),
+          SizedBox(
+            height: 74,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: providers.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 8),
+              itemBuilder: (context, index) {
+                final provider = providers[index];
+                final selected = provider.id == state.provider.id;
+                return Semantics(
+                  button: true,
+                  selected: selected,
+                  label: provider.name,
+                  child: Material(
+                    key: ValueKey('provider-${provider.id}'),
+                    color: selected
+                        ? const Color(0xFF243542)
+                        : const Color(0xCC141A23),
+                    borderRadius: BorderRadius.circular(16),
+                    child: InkWell(
+                      onTap: () => selectProvider(provider),
+                      borderRadius: BorderRadius.circular(16),
+                      child: Container(
+                        width: 92,
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                        decoration: BoxDecoration(
+                          border: Border.all(
+                            color: selected ? const Color(0xFF54788B) : line,
+                          ),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            ProviderBadge(provider, size: 30),
+                            const SizedBox(height: 6),
+                            Text(
+                              provider.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 9,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
-                          ),
-                          Text(
-                            provider.custom
-                                ? 'OpenAI-compatible API'
-                                : 'Официальное подключение',
-                            style: const TextStyle(color: muted, fontSize: 9),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
-                    if (active)
-                      const Icon(Icons.check_rounded, color: accent, size: 20),
-                  ],
+                  ),
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 18),
+          const _Label('API-ключ'),
+          const SizedBox(height: 8),
+          TextFormField(
+            key: ValueKey('api-key-${state.provider.id}'),
+            initialValue: state.key,
+            onChanged: controller.apiKey,
+            obscureText: !keyVisible,
+            autocorrect: false,
+            enableSuggestions: false,
+            decoration: InputDecoration(
+              hintText: state.provider.keyHint,
+              suffixIcon: IconButton(
+                onPressed: toggleKey,
+                icon: Icon(
+                  keyVisible
+                      ? Icons.visibility_off_outlined
+                      : Icons.visibility_outlined,
+                  color: muted,
                 ),
               ),
             ),
-          );
-        },
-      ),
-    );
-  }
+          ),
+          if (state.provider.custom) ...[
+            const SizedBox(height: 16),
+            const _Label('Base URL'),
+            const SizedBox(height: 8),
+            TextFormField(
+              key: const ValueKey('base-url'),
+              initialValue: state.baseUrl,
+              onChanged: controller.baseUrl,
+              autocorrect: false,
+              decoration: const InputDecoration(
+                hintText: 'https://api.example.com/v1',
+              ),
+            ),
+          ],
+          const SizedBox(height: 18),
+          SizedBox(
+            height: 54,
+            child: FilledButton.icon(
+              key: const ValueKey('load-models'),
+              onPressed: state.key.isEmpty || state.loadingModels
+                  ? null
+                  : openModels,
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF294353),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+              ),
+              icon: state.loadingModels
+                  ? const SizedBox.square(
+                      dimension: 17,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.grid_view_rounded),
+              label: Text(
+                state.models.isEmpty
+                    ? 'Загрузить и выбрать модель'
+                    : 'Выбрать модель (${state.models.length})',
+              ),
+            ),
+          ),
+          if (state.model.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Text(
+              state.model,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: accent, fontSize: 10),
+            ),
+          ],
+          const SizedBox(height: 18),
+          const _Label('Системная инструкция'),
+          const SizedBox(height: 8),
+          TextFormField(
+            initialValue: state.system,
+            onChanged: controller.system,
+            minLines: 3,
+            maxLines: 4,
+            decoration: const InputDecoration(
+              hintText: 'Как должен отвечать ассистент?',
+            ),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              const _Label('Температура'),
+              const Spacer(),
+              Text(
+                state.temperature.toStringAsFixed(1),
+                style: const TextStyle(color: accent, fontSize: 11),
+              ),
+            ],
+          ),
+          Slider(
+            value: state.temperature,
+            max: 2,
+            divisions: 20,
+            onChanged: controller.temperature,
+          ),
+        ],
+      );
 }
 
-class _ModelSheet extends ConsumerStatefulWidget {
-  const _ModelSheet();
+class _ModelPicker extends StatelessWidget {
+  const _ModelPicker({
+    super.key,
+    required this.state,
+    required this.models,
+    required this.onSearch,
+    required this.onSelect,
+    required this.onRefresh,
+  });
+
+  final ChatState state;
+  final List<AiModel> models;
+  final ValueChanged<String> onSearch;
+  final ValueChanged<AiModel> onSelect;
+  final VoidCallback onRefresh;
 
   @override
-  ConsumerState<_ModelSheet> createState() => _ModelSheetState();
-}
-
-class _ModelSheetState extends ConsumerState<_ModelSheet> {
-  String query = '';
-
-  @override
-  Widget build(BuildContext context) {
-    final state = ref.watch(chatProvider);
-    final models = state.models
-        .where(
-          (model) => '${model.name} ${model.id}'
-              .toLowerCase()
-              .contains(query.toLowerCase()),
-        )
-        .toList();
-    return _SheetShell(
-      title: 'Модели',
-      subtitle: '${state.provider.name} · ${state.models.length} доступно',
-      child: Column(
+  Widget build(BuildContext context) => Column(
         children: [
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14),
+            padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Row(
               children: [
                 Expanded(
                   child: TextField(
-                    onChanged: (value) => setState(() => query = value),
+                    key: const ValueKey('model-search'),
+                    autofocus: true,
+                    onChanged: onSearch,
                     decoration: const InputDecoration(
                       prefixIcon: Icon(Icons.search_rounded, color: muted),
                       hintText: 'Найти модель',
@@ -225,7 +368,7 @@ class _ModelSheetState extends ConsumerState<_ModelSheet> {
                 RoundButton(
                   icon: Icons.refresh_rounded,
                   size: 52,
-                  onTap: () => ref.read(chatProvider.notifier).loadModels(),
+                  onTap: onRefresh,
                 ),
               ],
             ),
@@ -237,22 +380,19 @@ class _ModelSheetState extends ConsumerState<_ModelSheet> {
               itemCount: models.length,
               itemBuilder: (context, index) {
                 final model = models[index];
-                final active = model.id == state.model;
+                final selected = model.id == state.model;
                 return Material(
-                  color: active
-                      ? const Color(0xFF1D2B36)
+                  color: selected
+                      ? const Color(0xFF20313D)
                       : Colors.transparent,
                   borderRadius: BorderRadius.circular(14),
                   child: InkWell(
-                    onTap: () {
-                      ref.read(chatProvider.notifier).model(model.id);
-                      Navigator.pop(context);
-                    },
+                    onTap: () => onSelect(model),
                     borderRadius: BorderRadius.circular(14),
                     child: Padding(
                       padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 11,
+                        horizontal: 13,
+                        vertical: 12,
                       ),
                       child: Row(
                         children: [
@@ -269,7 +409,6 @@ class _ModelSheetState extends ConsumerState<_ModelSheet> {
                                     fontWeight: FontWeight.w600,
                                   ),
                                 ),
-                                const SizedBox(height: 2),
                                 Text(
                                   model.id,
                                   maxLines: 1,
@@ -282,7 +421,7 @@ class _ModelSheetState extends ConsumerState<_ModelSheet> {
                               ],
                             ),
                           ),
-                          if (active)
+                          if (selected)
                             const Icon(
                               Icons.check_rounded,
                               color: accent,
@@ -297,167 +436,7 @@ class _ModelSheetState extends ConsumerState<_ModelSheet> {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _ConnectionSheet extends ConsumerStatefulWidget {
-  const _ConnectionSheet();
-
-  @override
-  ConsumerState<_ConnectionSheet> createState() => _ConnectionSheetState();
-}
-
-class _ConnectionSheetState extends ConsumerState<_ConnectionSheet> {
-  bool keyVisible = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final state = ref.watch(chatProvider);
-    final controller = ref.read(chatProvider.notifier);
-    return _SheetShell(
-      title: 'Подключение',
-      subtitle: 'Ключ остаётся только в памяти приложения',
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(16, 0, 16, 28),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const _Label('Провайдер'),
-            const SizedBox(height: 7),
-            Material(
-              color: const Color(0xFF141A23),
-              borderRadius: BorderRadius.circular(16),
-              child: InkWell(
-                onTap: () {
-                  final rootContext = Navigator.of(context, rootNavigator: true).context;
-                  Navigator.pop(context);
-                  Future<void>.delayed(const Duration(milliseconds: 180), () {
-                    if (rootContext.mounted) showProviders(rootContext, ref);
-                  });
-                },
-                borderRadius: BorderRadius.circular(16),
-                child: Container(
-                  height: 54,
-                  padding: const EdgeInsets.symmetric(horizontal: 13),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: line),
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Row(
-                    children: [
-                      ProviderBadge(state.provider, size: 30),
-                      const SizedBox(width: 11),
-                      Expanded(child: Text(state.provider.name)),
-                      const Icon(Icons.expand_more_rounded, color: muted),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 15),
-            const _Label('API-ключ'),
-            const SizedBox(height: 7),
-            TextFormField(
-              initialValue: state.key,
-              onChanged: controller.apiKey,
-              obscureText: !keyVisible,
-              autocorrect: false,
-              enableSuggestions: false,
-              decoration: InputDecoration(
-                hintText: state.provider.keyHint,
-                suffixIcon: IconButton(
-                  onPressed: () => setState(() => keyVisible = !keyVisible),
-                  icon: Icon(
-                    keyVisible
-                        ? Icons.visibility_off_outlined
-                        : Icons.visibility_outlined,
-                    color: muted,
-                  ),
-                ),
-              ),
-            ),
-            if (state.provider.custom) ...[
-              const SizedBox(height: 15),
-              const _Label('Base URL'),
-              const SizedBox(height: 7),
-              TextFormField(
-                initialValue: state.baseUrl,
-                onChanged: controller.baseUrl,
-                autocorrect: false,
-                decoration: const InputDecoration(
-                  hintText: 'https://api.example.com/v1',
-                ),
-              ),
-            ],
-            const SizedBox(height: 18),
-            SizedBox(
-              width: double.infinity,
-              height: 52,
-              child: FilledButton.icon(
-                onPressed: state.key.isEmpty || state.loadingModels
-                    ? null
-                    : () async {
-                        final loaded = await controller.loadModels();
-                        if (loaded && context.mounted) {
-                          Navigator.pop(context);
-                          await showModels(context, ref);
-                        }
-                      },
-                style: FilledButton.styleFrom(
-                  backgroundColor: const Color(0xFF263B49),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                ),
-                icon: state.loadingModels
-                    ? const SizedBox.square(
-                        dimension: 17,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.sync_rounded),
-                label: Text(
-                  state.models.isEmpty
-                      ? 'Загрузить модели'
-                      : 'Обновить модели (${state.models.length})',
-                ),
-              ),
-            ),
-            const SizedBox(height: 18),
-            const _Label('Системная инструкция'),
-            const SizedBox(height: 7),
-            TextFormField(
-              initialValue: state.system,
-              onChanged: controller.system,
-              minLines: 3,
-              maxLines: 5,
-              decoration: const InputDecoration(
-                hintText: 'Как должен отвечать ассистент?',
-              ),
-            ),
-            const SizedBox(height: 15),
-            Row(
-              children: [
-                const _Label('Температура'),
-                const Spacer(),
-                Text(
-                  state.temperature.toStringAsFixed(1),
-                  style: const TextStyle(color: accent, fontSize: 11),
-                ),
-              ],
-            ),
-            Slider(
-              value: state.temperature,
-              max: 2,
-              divisions: 20,
-              onChanged: controller.temperature,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+      );
 }
 
 class _Label extends StatelessWidget {
