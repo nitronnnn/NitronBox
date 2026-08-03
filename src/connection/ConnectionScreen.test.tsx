@@ -3,11 +3,17 @@ import { Text } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { ConnectionScreen } from './ConnectionScreen';
+import { ConnectionEditor } from './ConnectionEditor';
 import { ConnectionProvider, useConnection } from './store';
 import type { ConnectionGateway } from './types';
 
 const gateway: ConnectionGateway = {
-  connect: jest.fn().mockResolvedValue({ latencyMs: 37, modelCount: 12 }),
+  connect: jest.fn().mockResolvedValue({
+    latencyMs: 37,
+    modelCount: 2,
+    models: ['claude-test', 'claude-fast'],
+  }),
+  sendMessage: jest.fn().mockResolvedValue('Hello from the model'),
 };
 
 function StateProbe() {
@@ -26,6 +32,7 @@ describe('ConnectionScreen', () => {
           }}
         >
           <ConnectionScreen />
+          <ConnectionEditor />
           <StateProbe />
         </SafeAreaProvider>
       </ConnectionProvider>,

@@ -16,6 +16,7 @@ import type {
   ConnectionGateway,
   ConnectionPoint,
   ConnectionSnapshot,
+  ChatMessage,
   RealtimeConnectionSource,
 } from './types';
 
@@ -24,16 +25,27 @@ type State = ConnectionSnapshot & {
   selectedPointId: string;
   apiKeys: Record<string, string>;
   customBaseUrl: string;
-  editorVisible: boolean;
+  screen: 'connect' | 'settings' | 'chat';
+  chatMessages: ChatMessage[];
+  sending: boolean;
 };
 
 type Action =
   | { type: 'select'; pointId: string }
   | { type: 'key'; pointId: string; value: string }
   | { type: 'baseUrl'; value: string }
-  | { type: 'editor'; visible: boolean }
+  | { type: 'screen'; screen: State['screen'] }
+  | { type: 'model'; model: string }
   | { type: 'connecting' }
-  | { type: 'connected'; latencyMs: number | null; modelCount: number | null }
+  | {
+      type: 'connected';
+      latencyMs: number | null;
+      modelCount: number | null;
+      models: string[];
+    }
+  | { type: 'sendStart'; user: ChatMessage; assistant: ChatMessage }
+  | { type: 'sendSuccess'; assistantId: string; content: string }
+  | { type: 'sendError'; assistantId: string; message: string }
   | { type: 'error'; message: string }
   | { type: 'disconnect' }
   | { type: 'realtime'; patch: Partial<ConnectionSnapshot> };
@@ -43,13 +55,17 @@ const initialState: State = {
   selectedPointId: initialConnectionPoints[0]!.id,
   apiKeys: {},
   customBaseUrl: '',
-  editorVisible: false,
+  screen: 'connect',
+  chatMessages: [],
+  sending: false,
   phase: 'idle',
   activePointId: null,
   latencyMs: null,
   modelCount: null,
   lastUpdatedAt: null,
   message: null,
+  models: [],
+  selectedModel: null,
 };
 
 const reducer = (state: State, action: Action): State => {
@@ -64,8 +80,10 @@ const reducer = (state: State, action: Action): State => {
       };
     case 'baseUrl':
       return { ...state, customBaseUrl: action.value, message: null };
-    case 'editor':
-      return { ...state, editorVisible: action.visible };
+    case 'screen':
+      return { ...state, screen: action.screen };
+    case 'model':
+      return { ...state, selectedModel: action.model };
     case 'connecting':
       return { ...state, phase: 'connecting', message: null };
     case 'connected':
@@ -73,11 +91,38 @@ const reducer = (state: State, action: Action): State => {
         ...state,
         phase: 'connected',
         activePointId: state.selectedPointId,
-        editorVisible: false,
+        screen: 'chat',
         latencyMs: action.latencyMs,
         modelCount: action.modelCount,
         lastUpdatedAt: Date.now(),
         message: null,
+        models: action.models,
+        selectedModel:
+          state.selectedModel && action.models.includes(state.selectedModel)
+            ? state.selectedModel
+            : action.models[0]!,
+      };
+    case 'sendStart':
+      return {
+        ...state,
+        sending: true,
+        message: null,
+        chatMessages: [...state.chatMessages, action.user, action.assistant],
+      };
+    case 'sendSuccess':
+      return {
+        ...state,
+        sending: false,
+        chatMessages: state.chatMessages.map((message) =>
+          message.id === action.assistantId ? { ...message, content: action.content } : message,
+        ),
+      };
+    case 'sendError':
+      return {
+        ...state,
+        sending: false,
+        message: action.message,
+        chatMessages: state.chatMessages.filter((message) => message.id !== action.assistantId),
       };
     case 'error':
       return { ...state, phase: 'error', message: action.message };
@@ -89,6 +134,10 @@ const reducer = (state: State, action: Action): State => {
         latencyMs: null,
         modelCount: null,
         message: null,
+        screen: 'connect',
+        models: [],
+        selectedModel: null,
+        chatMessages: [],
       };
     case 'realtime':
       return { ...state, ...action.patch };
@@ -101,8 +150,10 @@ type Store = State & {
   selectPoint(id: string): void;
   setKey(value: string): void;
   setCustomBaseUrl(value: string): void;
-  setEditorVisible(value: boolean): void;
+  setScreen(screen: State['screen']): void;
+  setModel(model: string): void;
   connect(): Promise<void>;
+  sendMessage(content: string): Promise<void>;
   disconnect(): void;
 };
 
@@ -148,6 +199,43 @@ export function ConnectionProvider({
     }
   }, [gateway, selectedKey, selectedPoint, state.customBaseUrl]);
 
+  const sendMessage = useCallback(
+    async (raw: string) => {
+      const content = raw.trim();
+      if (!content || state.sending || !state.selectedModel) return;
+      const user: ChatMessage = {
+        id: `u-${Date.now()}`,
+        role: 'user',
+        content,
+      };
+      const assistant: ChatMessage = {
+        id: `a-${Date.now()}`,
+        role: 'assistant',
+        content: '',
+      };
+      dispatch({ type: 'sendStart', user, assistant });
+      try {
+        const response = await gateway.sendMessage({
+          point: selectedPoint,
+          apiKey: selectedKey,
+          customBaseUrl: state.customBaseUrl,
+          model: state.selectedModel,
+          messages: [...state.chatMessages, user],
+        });
+        dispatch({ type: 'sendSuccess', assistantId: assistant.id, content: response });
+        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      } catch (error) {
+        dispatch({
+          type: 'sendError',
+          assistantId: assistant.id,
+          message: error instanceof Error ? error.message : 'Unable to send message',
+        });
+        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      }
+    },
+    [gateway, selectedKey, selectedPoint, state.chatMessages, state.customBaseUrl, state.selectedModel, state.sending],
+  );
+
   const value = useMemo<Store>(
     () => ({
       ...state,
@@ -163,16 +251,20 @@ export function ConnectionProvider({
       setCustomBaseUrl(value) {
         dispatch({ type: 'baseUrl', value });
       },
-      setEditorVisible(visible) {
-        dispatch({ type: 'editor', visible });
+      setScreen(screen) {
+        dispatch({ type: 'screen', screen });
+      },
+      setModel(model) {
+        dispatch({ type: 'model', model });
       },
       connect,
+      sendMessage,
       disconnect() {
         dispatch({ type: 'disconnect' });
         void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       },
     }),
-    [connect, selectedKey, selectedPoint, state],
+    [connect, selectedKey, selectedPoint, sendMessage, state],
   );
 
   return <ConnectionContext.Provider value={value}>{children}</ConnectionContext.Provider>;

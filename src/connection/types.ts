@@ -20,6 +20,14 @@ export type ConnectionSnapshot = {
   modelCount: number | null;
   lastUpdatedAt: number | null;
   message: string | null;
+  models: string[];
+  selectedModel: string | null;
+};
+
+export type ChatMessage = {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
 };
 
 export type RealtimeConnectionSource = {
@@ -33,5 +41,8 @@ export type ConnectRequest = {
 };
 
 export type ConnectionGateway = {
-  connect(request: ConnectRequest): Promise<Pick<ConnectionSnapshot, 'latencyMs' | 'modelCount'>>;
+  connect(
+    request: ConnectRequest,
+  ): Promise<Pick<ConnectionSnapshot, 'latencyMs' | 'modelCount' | 'models'>>;
+  sendMessage(request: ConnectRequest & { model: string; messages: ChatMessage[] }): Promise<string>;
 };

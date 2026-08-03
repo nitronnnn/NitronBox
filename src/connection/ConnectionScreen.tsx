@@ -21,7 +21,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusIndicator } from '@/components/StatusIndicator';
 import { Symbol } from '@/components/Symbol';
 import { colors, radius, spacing } from '@/theme/semantic';
-import { ConnectionEditor } from './ConnectionEditor';
 import { useConnection } from './store';
 
 const phaseCopy = {
@@ -48,7 +47,7 @@ export function ConnectionScreen() {
   const primaryAction = () => {
     actionScale.value = 0.975;
     if (store.phase === 'connected') store.disconnect();
-    else if (!store.selectedKey) store.setEditorVisible(true);
+    else if (!store.selectedKey) store.setScreen('settings');
     else void store.connect();
   };
 
@@ -60,7 +59,7 @@ export function ConnectionScreen() {
           accessibilityRole="button"
           accessibilityLabel="Connection settings"
           hitSlop={10}
-          onPress={() => store.setEditorVisible(true)}
+          onPress={() => store.setScreen('settings')}
           style={({ pressed }) => [styles.navigationButton, pressed && styles.pressed]}
         >
           <Settings2 size={20} color={colors.label} strokeWidth={2} />
@@ -172,7 +171,6 @@ export function ConnectionScreen() {
         </Animated.View>
       </View>
 
-      <ConnectionEditor />
     </View>
   );
 }
