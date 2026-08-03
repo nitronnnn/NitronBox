@@ -25,6 +25,7 @@ jobs:
           cache: gradle
       - run: npm ci
       - run: npm run android:sync
+      - run: chmod +x android/gradlew
       - name: Build signed APK
         working-directory: android
         run: ./gradlew assembleDebug
