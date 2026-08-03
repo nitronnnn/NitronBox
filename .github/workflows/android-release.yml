@@ -22,7 +22,6 @@ jobs:
         with:
           distribution: temurin
           java-version: 17
-          cache: gradle
       - run: npm install
       - run: npm run typecheck
       - run: npm test
