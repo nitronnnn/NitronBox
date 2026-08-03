@@ -69,7 +69,6 @@ class Glass extends StatelessWidget {
         glassColor: const Color(0x1AFFFFFF),
         lightIntensity: .8,
         ambientStrength: .45,
-        outlineIntensity: .4,
         saturation: 1.05,
       ),
       shape: LiquidRoundedSuperellipse(borderRadius: radius),
