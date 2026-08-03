@@ -1,6 +1,9 @@
+.idea
+*.iml
+*.log
 node_modules
 dist
-.env
-*.log
 android/.gradle
 android/local.properties
+android/app/build
+android/build

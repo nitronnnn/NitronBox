@@ -1,8 +1,18 @@
 # NitronBox
 
-Mobile-first AI chat with a liquid glass interface, live provider model catalogs, Markdown rendering and BYOK connections.
+Native Android AI chat built with Kotlin and Jetpack Compose.
+
+## Stack
+
+- Kotlin
+- Jetpack Compose and Material 3
+- OkHttp with native SSE streaming
+- Native OpenAI, Anthropic and Gemini protocol adapters
+- No JavaScript, React, WebView, Capacitor or local server
 
 ## Providers
+
+NitronBox loads the current model catalog directly from each provider API:
 
 - OpenAI
 - Anthropic
@@ -11,26 +21,15 @@ Mobile-first AI chat with a liquid glass interface, live provider model catalogs
 - Groq
 - Mistral AI
 - xAI
-- Any OpenAI-compatible custom endpoint
+- Custom OpenAI-compatible provider
 
-## Run
+## Build
 
-```bash
-npm install
-npm run dev
-```
-
-Open `http://localhost:5173`. Production build:
+Open the `android` directory in Android Studio or run:
 
 ```bash
-npm run build
-npm start
+cd android
+./gradlew assembleDebug
 ```
 
-The production server opens on `http://127.0.0.1:8788`.
-
-## Android
-
-The Android application uses Capacitor's native HTTP transport, so provider APIs work directly in the APK without a local web server. Build with `npm run android:apk` when Android SDK is installed, or use the included GitHub Actions workflow.
-
-API keys are kept only in the current tab memory and are never written to local storage. Chat history and non-secret settings are stored locally in the browser.
+API keys are kept in application memory and are not persisted.
