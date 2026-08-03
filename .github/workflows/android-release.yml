@@ -22,7 +22,7 @@ jobs:
         with:
           distribution: temurin
           java-version: 17
-      - run: npm install
+      - run: npm ci
       - run: npm run typecheck
       - run: npm test
       - run: npx expo prebuild --clean --platform android --no-install
