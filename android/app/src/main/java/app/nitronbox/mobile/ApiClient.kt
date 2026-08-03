@@ -59,7 +59,7 @@ class ApiClient {
         system: String,
         temperature: Float,
         messages: List<ChatMessage>,
-        onDelta: (String) -> Unit,
+        onDelta: suspend (String) -> Unit,
     ) = withContext(Dispatchers.IO) {
         val endpoint = when {
             provider.custom -> chatUrl(baseUrl)

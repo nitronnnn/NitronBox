@@ -98,8 +98,8 @@ private fun NitronBoxApp(vm: MainViewModel = viewModel()) {
             AuroraBackground()
             Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
                 TopBar(state, openDrawer = { scope.launch { drawerState.open() } }, openModels = ::openModels, openSettings = { sheet = Sheet.SETTINGS }, newChat = vm::newChat)
-                if (active == null || active.messages.isEmpty()) Welcome(state, vm.key().isNotBlank(), openModels, send = { vm.send(it) })
-                else ChatMessages(active.messages, state.generating)
+                if (active == null || active.messages.isEmpty()) Welcome(state, vm.key().isNotBlank(), ::openModels, Modifier.weight(1f), send = { vm.send(it) })
+                else ChatMessages(active.messages, state.generating, Modifier.weight(1f))
                 state.error.takeIf { it.isNotBlank() }?.let { ErrorPill(it, vm::clearError) }
                 Composer(draft, state.generating, onDraft = { draft = it }, onSend = { vm.send(draft) { draft = "" } }, onStop = vm::stop, onProvider = { sheet = Sheet.PROVIDERS })
             }
@@ -154,8 +154,8 @@ private fun TopBar(state: UiState, openDrawer: () -> Unit, openModels: () -> Uni
 }
 
 @Composable
-private fun Welcome(state: UiState, connected: Boolean, openModels: () -> Unit, send: (String) -> Unit) {
-    Column(Modifier.fillMaxWidth().weight(1f).padding(horizontal = 18.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+private fun Welcome(state: UiState, connected: Boolean, openModels: () -> Unit, modifier: Modifier = Modifier, send: (String) -> Unit) {
+    Column(modifier.fillMaxWidth().padding(horizontal = 18.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
         Box(Modifier.size(104.dp), contentAlignment = Alignment.Center) {
             Canvas(Modifier.fillMaxSize()) { drawRoundRect(Color(0x168EDBFF), cornerRadius = androidx.compose.ui.geometry.CornerRadius(30f), style = Stroke(2f), topLeft = Offset(10f, 10f), size = Size(size.width - 20f, size.height - 20f)) }
             NitronLogo(82.dp)
@@ -189,10 +189,10 @@ private fun PromptCard(icon: ImageVector, title: String, modifier: Modifier, act
 }
 
 @Composable
-private fun ChatMessages(messages: List<ChatMessage>, generating: Boolean) {
+private fun ChatMessages(messages: List<ChatMessage>, generating: Boolean, modifier: Modifier = Modifier) {
     val listState = rememberLazyListState()
     LaunchedEffect(messages.lastOrNull()?.content) { if (messages.isNotEmpty()) listState.animateScrollToItem(messages.lastIndex) }
-    LazyColumn(Modifier.fillMaxWidth().weight(1f), state = listState, contentPadding = PaddingValues(14.dp, 22.dp), verticalArrangement = Arrangement.spacedBy(22.dp)) {
+    LazyColumn(modifier.fillMaxWidth(), state = listState, contentPadding = PaddingValues(14.dp, 22.dp), verticalArrangement = Arrangement.spacedBy(22.dp)) {
         items(messages, key = { it.id }) { message ->
             if (message.role == "user") Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                 Box(Modifier.widthIn(max = 330.dp).background(Brush.linearGradient(listOf(Color(0xCC5979DB), Color(0xB0684DB7))), RoundedCornerShape(20.dp, 20.dp, 6.dp, 20.dp)).border(1.dp, Color(0x35D4ECFF), RoundedCornerShape(20.dp, 20.dp, 6.dp, 20.dp)).padding(14.dp, 11.dp)) { Text(message.content, fontSize = 13.sp, lineHeight = 20.sp) }
