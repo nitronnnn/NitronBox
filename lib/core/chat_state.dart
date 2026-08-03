@@ -3,7 +3,7 @@ import 'api_client.dart';
 import 'models.dart';
 
 class ChatState {
-  const ChatState({this.provider = providers.first, this.apiKeys = const {}, this.model = '', this.baseUrl = '', this.system = '', this.temperature = .7, this.models = const [], this.chats = const [], this.activeId, this.loadingModels = false, this.streaming = false, this.error = ''});
+  const ChatState({this.provider = const AiProvider(id: 'openai', name: 'OpenAI', short: 'OA', color: 0xFF10A37F, protocol: ApiProtocol.openAi, chatUrl: 'https://api.openai.com/v1/chat/completions', modelsUrl: 'https://api.openai.com/v1/models', keyHint: 'sk-...'), this.apiKeys = const {}, this.model = '', this.baseUrl = '', this.system = '', this.temperature = .7, this.models = const [], this.chats = const [], this.activeId, this.loadingModels = false, this.streaming = false, this.error = ''});
   final AiProvider provider;
   final Map<String, String> apiKeys;
   final String model;

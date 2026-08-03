@@ -249,6 +249,104 @@ class _Composer extends StatelessWidget {
 }
 
 class _HistoryDrawer extends ConsumerWidget {
-  const _HistoryDrawer({required this.close}); final VoidCallback close;
-  @override Widget build(BuildContext context,WidgetRef ref){final state=ref.watch(chatProvider),controller=ref.read(chatProvider.notifier);return Drawer(width:310,backgroundColor:const Color(0xFF0E131B),child:SafeArea(child:Column(children:[Padding(padding:const EdgeInsets.all(16),child:Row(children:[const NitronLogo(size:38),const SizedBox(width:10),const Expanded(child:Text('NitronBox',style:TextStyle(fontSize:17,fontWeight:FontWeight.w800))),RoundButton(icon:Icons.close_rounded,onTap:close)])),Padding(padding:const EdgeInsets.symmetric(horizontal:14),child:SizedBox(width:double.infinity,height:48,child:FilledButton.icon(onPressed:(){controller.newChat();close();},style:FilledButton.styleFrom(backgroundColor:const Color(0xFF20303C),shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(15))),icon:const Icon(Icons.add_rounded),label:const Text('Новый чат')))),const Padding(padding:EdgeInsets.fromLTRB(18,22,18,8),child:Align(alignment:Alignment.centerLeft,child:Text('ИСТОРИЯ',style:TextStyle(color:muted,fontSize:9,fontWeight:FontWeight.w700,letterSpacing:1)))),Expanded(child:ListView.builder(padding:const EdgeInsets.symmetric(horizontal:10),itemCount:state.chats.length,itemBuilder:(_,i){final chat=state.chats[i],active=chat.id==state.activeId;return Material(color:active?const Color(0xFF192630):Colors.transparent,borderRadius:BorderRadius.circular(13),child:InkWell(onTap:(){controller.openChat(chat.id);close();},borderRadius:BorderRadius.circular(13),child:Padding(padding:const EdgeInsets.symmetric(horizontal:10,vertical:11),child:Row(children:[const Icon(Icons.chat_bubble_outline_rounded,size:17,color:muted),const SizedBox(width:9),Expanded(child:Text(chat.title,maxLines:1,overflow:TextOverflow.ellipsis,style:const TextStyle(fontSize:11))),IconButton(onPressed:()=>controller.deleteChat(chat.id),visualDensity:VisualDensity.compact,icon:const Icon(Icons.delete_outline_rounded,size:17,color:muted))]))));})),const Padding(padding:EdgeInsets.all(18),child:Text('API-ключи не сохраняются',style:TextStyle(color:muted,fontSize:9)))]))));}
+  const _HistoryDrawer({required this.close});
+  final VoidCallback close;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final state = ref.watch(chatProvider);
+    final controller = ref.read(chatProvider.notifier);
+    return Drawer(
+      width: 310,
+      backgroundColor: const Color(0xFF0E131B),
+      child: SafeArea(
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  const NitronLogo(size: 38),
+                  const SizedBox(width: 10),
+                  const Expanded(
+                    child: Text(
+                      'NitronBox',
+                      style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
+                    ),
+                  ),
+                  RoundButton(icon: Icons.close_rounded, onTap: close),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              child: SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: FilledButton.icon(
+                  onPressed: () {
+                    controller.newChat();
+                    close();
+                  },
+                  style: FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFF20303C),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                  ),
+                  icon: const Icon(Icons.add_rounded),
+                  label: const Text('Новый чат'),
+                ),
+              ),
+            ),
+            const Padding(
+              padding: EdgeInsets.fromLTRB(18, 22, 18, 8),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text('ИСТОРИЯ', style: TextStyle(color: muted, fontSize: 9, fontWeight: FontWeight.w700, letterSpacing: 1)),
+              ),
+            ),
+            Expanded(
+              child: ListView.builder(
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                itemCount: state.chats.length,
+                itemBuilder: (context, index) {
+                  final chat = state.chats[index];
+                  final active = chat.id == state.activeId;
+                  return Material(
+                    color: active ? const Color(0xFF192630) : Colors.transparent,
+                    borderRadius: BorderRadius.circular(13),
+                    child: InkWell(
+                      onTap: () {
+                        controller.openChat(chat.id);
+                        close();
+                      },
+                      borderRadius: BorderRadius.circular(13),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 11),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.chat_bubble_outline_rounded, size: 17, color: muted),
+                            const SizedBox(width: 9),
+                            Expanded(child: Text(chat.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11))),
+                            IconButton(
+                              onPressed: () => controller.deleteChat(chat.id),
+                              visualDensity: VisualDensity.compact,
+                              icon: const Icon(Icons.delete_outline_rounded, size: 17, color: muted),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+            const Padding(
+              padding: EdgeInsets.all(18),
+              child: Text('API-ключи не сохраняются', style: TextStyle(color: muted, fontSize: 9)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }

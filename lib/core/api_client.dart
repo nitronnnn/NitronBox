@@ -55,7 +55,10 @@ class AiApiClient {
     };
     try {
       final response = await _dio.post<ResponseBody>(url, data: data, cancelToken: _cancelToken, options: Options(headers: _headers(provider, key), responseType: ResponseType.stream));
-      final lines = response.data!.stream.transform(utf8.decoder).transform(const LineSplitter());
+      final lines = response.data!.stream
+          .cast<List<int>>()
+          .transform(utf8.decoder)
+          .transform(const LineSplitter());
       await for (final line in lines) {
         if (!line.startsWith('data:')) continue;
         final payload = line.substring(5).trim();
