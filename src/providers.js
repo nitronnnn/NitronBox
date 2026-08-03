@@ -1,12 +1,12 @@
 export const PROVIDERS = [
-  { id: 'openai', name: 'OpenAI', mark: 'OA', color: '#101010', model: 'gpt-4o-mini', hint: 'sk-...' },
-  { id: 'anthropic', name: 'Anthropic', mark: 'AN', color: '#d97757', model: 'claude-3-5-sonnet-latest', hint: 'sk-ant-...' },
-  { id: 'gemini', name: 'Google Gemini', mark: 'G', color: '#4285f4', model: 'gemini-2.0-flash', hint: 'AIza...' },
-  { id: 'openrouter', name: 'OpenRouter', mark: 'OR', color: '#695cff', model: 'openai/gpt-4o-mini', hint: 'sk-or-...' },
-  { id: 'groq', name: 'Groq', mark: 'GQ', color: '#f55036', model: 'llama-3.3-70b-versatile', hint: 'gsk_...' },
-  { id: 'mistral', name: 'Mistral AI', mark: 'MI', color: '#ff7000', model: 'mistral-small-latest', hint: 'API key' },
-  { id: 'xai', name: 'xAI', mark: 'x', color: '#171717', model: 'grok-2-latest', hint: 'xai-...' },
-  { id: 'custom', name: 'Свой сервер', mark: '+', color: '#16a085', model: '', hint: 'API key', custom: true },
+  { id: 'openai', name: 'OpenAI', mark: 'OA', color: '#10a37f', hint: 'sk-...' },
+  { id: 'anthropic', name: 'Anthropic', mark: 'AN', color: '#d97757', hint: 'sk-ant-...' },
+  { id: 'gemini', name: 'Google Gemini', mark: 'G', color: '#4285f4', hint: 'AIza...' },
+  { id: 'openrouter', name: 'OpenRouter', mark: 'OR', color: '#7868ff', hint: 'sk-or-...' },
+  { id: 'groq', name: 'Groq', mark: 'GQ', color: '#f55036', hint: 'gsk_...' },
+  { id: 'mistral', name: 'Mistral AI', mark: 'MI', color: '#ff7000', hint: 'API key' },
+  { id: 'xai', name: 'xAI', mark: 'x', color: '#202020', hint: 'xai-...' },
+  { id: 'custom', name: 'Свой провайдер', mark: '+', color: '#00a99d', hint: 'API key', custom: true },
 ];
 
 export const STARTERS = [

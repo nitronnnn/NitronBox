@@ -1,4 +1,4 @@
-package com.prism.ai;
+package app.nitronbox.mobile;
 
 import com.getcapacitor.BridgeActivity;
 

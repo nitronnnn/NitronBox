@@ -1,6 +1,6 @@
 {
-  "appId": "com.prism.ai",
-  "appName": "Prism AI",
+  "appId": "app.nitronbox.mobile",
+  "appName": "NitronBox",
   "webDir": "dist",
   "server": {
     "androidScheme": "https"

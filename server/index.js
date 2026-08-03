@@ -9,13 +9,13 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 app.use(express.json({ limit: '2mb' }));
 
 const PROVIDERS = {
-  openai: { url: 'https://api.openai.com/v1/chat/completions', protocol: 'openai' },
-  anthropic: { url: 'https://api.anthropic.com/v1/messages', protocol: 'anthropic' },
-  gemini: { url: 'https://generativelanguage.googleapis.com/v1beta', protocol: 'gemini' },
-  openrouter: { url: 'https://openrouter.ai/api/v1/chat/completions', protocol: 'openai' },
-  groq: { url: 'https://api.groq.com/openai/v1/chat/completions', protocol: 'openai' },
-  mistral: { url: 'https://api.mistral.ai/v1/chat/completions', protocol: 'openai' },
-  xai: { url: 'https://api.x.ai/v1/chat/completions', protocol: 'openai' },
+  openai: { url: 'https://api.openai.com/v1/chat/completions', models: 'https://api.openai.com/v1/models', protocol: 'openai' },
+  anthropic: { url: 'https://api.anthropic.com/v1/messages', models: 'https://api.anthropic.com/v1/models?limit=1000', protocol: 'anthropic' },
+  gemini: { url: 'https://generativelanguage.googleapis.com/v1beta', models: 'https://generativelanguage.googleapis.com/v1beta/models', protocol: 'gemini' },
+  openrouter: { url: 'https://openrouter.ai/api/v1/chat/completions', models: 'https://openrouter.ai/api/v1/models', protocol: 'openai' },
+  groq: { url: 'https://api.groq.com/openai/v1/chat/completions', models: 'https://api.groq.com/openai/v1/models', protocol: 'openai' },
+  mistral: { url: 'https://api.mistral.ai/v1/chat/completions', models: 'https://api.mistral.ai/v1/models', protocol: 'openai' },
+  xai: { url: 'https://api.x.ai/v1/chat/completions', models: 'https://api.x.ai/v1/models', protocol: 'openai' },
 };
 
 function cleanBaseUrl(value) {
@@ -27,6 +27,11 @@ function cleanBaseUrl(value) {
 function openAiUrl(base) {
   if (/\/chat\/completions\/?$/.test(base)) return base;
   return `${base}${/\/v1$/.test(base) ? '' : '/v1'}/chat/completions`;
+}
+
+function modelsUrl(base) {
+  if (/\/chat\/completions\/?$/.test(base)) return base.replace(/\/chat\/completions\/?$/, '/models');
+  return `${base}${/\/v1$/.test(base) ? '' : '/v1'}/models`;
 }
 
 function createRequest({ provider, apiKey, baseUrl, model, messages, temperature }) {
@@ -78,12 +83,42 @@ function createRequest({ provider, apiKey, baseUrl, model, messages, temperature
     headers: {
       'content-type': 'application/json',
       authorization: `Bearer ${apiKey}`,
-      ...(provider === 'openrouter' ? { 'HTTP-Referer': 'http://localhost', 'X-Title': 'Prism AI' } : {}),
+      ...(provider === 'openrouter' ? { 'HTTP-Referer': 'http://localhost', 'X-Title': 'NitronBox' } : {}),
     },
     body: { model, messages, stream: true, temperature },
     protocol,
   };
 }
+
+app.post('/api/models', async (req, res) => {
+  const { provider, apiKey, baseUrl } = req.body || {};
+  const preset = PROVIDERS[provider];
+  const protocol = provider === 'custom' ? 'openai' : preset?.protocol;
+  if (!protocol || !apiKey) return res.status(400).json({ error: 'Укажите провайдера и API-ключ' });
+  try {
+    let url = provider === 'custom' ? modelsUrl(cleanBaseUrl(baseUrl)) : preset.models;
+    const headers = protocol === 'anthropic'
+      ? { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' }
+      : protocol === 'gemini' ? {} : { authorization: `Bearer ${apiKey}` };
+    if (protocol === 'gemini') url += `?key=${encodeURIComponent(apiKey)}&pageSize=1000`;
+    const upstream = await fetch(url, { headers });
+    const body = await upstream.json().catch(() => ({}));
+    if (!upstream.ok) return res.status(upstream.status).json({ error: body.error?.message || body.message || `Ошибка каталога ${upstream.status}` });
+    const source = protocol === 'gemini' ? body.models || [] : body.data || body.models || [];
+    const models = source
+      .filter((item) => protocol !== 'gemini' || item.supportedGenerationMethods?.includes('generateContent'))
+      .map((item) => ({
+        id: protocol === 'gemini' ? String(item.name || '').replace(/^models\//, '') : item.id || item.name,
+        name: item.displayName || item.name || item.id,
+        description: item.description || item.owned_by || '',
+      }))
+      .filter((item) => item.id)
+      .sort((a, b) => a.name.localeCompare(b.name));
+    res.json({ models });
+  } catch (error) {
+    res.status(500).json({ error: error.message || 'Не удалось загрузить модели' });
+  }
+});
 
 function extractDelta(data, protocol) {
   if (protocol === 'anthropic') return data.type === 'content_block_delta' ? data.delta?.text || '' : '';
@@ -166,5 +201,5 @@ app.get('*', (req, res, next) => {
 });
 
 app.listen(port, '127.0.0.1', () => {
-  console.log(`Prism AI server: http://127.0.0.1:${port}`);
+  console.log(`NitronBox server: http://127.0.0.1:${port}`);
 });

@@ -1,6 +1,6 @@
-# Prism AI
+# NitronBox
 
-Mobile-first AI chat with a liquid glass interface, Markdown rendering and BYOK connections.
+Mobile-first AI chat with a liquid glass interface, live provider model catalogs, Markdown rendering and BYOK connections.
 
 ## Providers
 
