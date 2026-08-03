@@ -17,6 +17,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   final scaffoldKey = GlobalKey<ScaffoldState>();
   final composer = TextEditingController();
   final scroll = ScrollController();
+  String lastMessageSignature = '';
 
   @override
   void dispose() {
@@ -52,15 +53,23 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           ),
         );
     });
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (messages.isNotEmpty && scroll.hasClients) {
+    final signature = messages.isEmpty
+        ? ''
+        : '${messages.last.id}:${messages.last.content.length}';
+    if (signature != lastMessageSignature) {
+      lastMessageSignature = signature;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !scroll.hasClients) return;
+        final distance = scroll.position.maxScrollExtent - scroll.position.pixels;
+        if (distance < 180 || state.streaming) {
         scroll.animateTo(
           scroll.position.maxScrollExtent,
           duration: const Duration(milliseconds: 260),
           curve: Curves.easeOutCubic,
         );
-      }
-    });
+        }
+      });
+    }
 
     return Scaffold(
       key: scaffoldKey,
@@ -128,8 +137,10 @@ class _Header extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(10, 8, 10, 0),
         child: Glass(
           padding: const EdgeInsets.all(7),
-          child: Row(
-            children: [
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final compact = constraints.maxWidth < 350;
+              return Row(children: [
               RoundButton(icon: Icons.menu_rounded, onTap: menu),
               const SizedBox(width: 7),
               Expanded(
@@ -143,13 +154,13 @@ class _Header extends StatelessWidget {
                       child: Row(
                         children: [
                           ProviderBadge(state.provider, size: 28),
-                          const SizedBox(width: 10),
+                          SizedBox(width: compact ? 7 : 10),
                           Expanded(
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(state.provider.name, style: const TextStyle(color: muted, fontSize: 9)),
+                                if (!compact) Text(state.provider.name, style: const TextStyle(color: muted, fontSize: 9)),
                                 Text(state.model.isEmpty ? 'Выберите модель' : state.model, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
                               ],
                             ),
@@ -163,9 +174,12 @@ class _Header extends StatelessWidget {
               ),
               const SizedBox(width: 7),
               RoundButton(icon: Icons.tune_rounded, onTap: settings),
-              const SizedBox(width: 7),
-              RoundButton(icon: Icons.add_rounded, onTap: newChat),
-            ],
+              if (!compact) ...[
+                const SizedBox(width: 7),
+                RoundButton(icon: Icons.add_rounded, onTap: newChat),
+              ],
+            ]);
+            },
           ),
         ),
       );
@@ -179,18 +193,18 @@ class _Welcome extends StatelessWidget {
   @override
   Widget build(BuildContext context) => LayoutBuilder(
         builder: (context, box) => SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 22),
+          padding: const EdgeInsets.fromLTRB(20, 18, 20, 22),
           child: ConstrainedBox(
             constraints: BoxConstraints(minHeight: box.maxHeight),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const NitronLogo(size: 82),
-                const SizedBox(height: 20),
-                const Text('NitronBox', style: TextStyle(fontSize: 34, fontWeight: FontWeight.w800, letterSpacing: -1.4)),
+                NitronLogo(size: box.maxHeight < 480 ? 60 : 76),
+                SizedBox(height: box.maxHeight < 480 ? 12 : 18),
+                Text('NitronBox', style: TextStyle(fontSize: box.maxHeight < 480 ? 28 : 32, fontWeight: FontWeight.w800, letterSpacing: -1.2)),
                 const SizedBox(height: 4),
                 const Text('Любая модель. Один аккуратный чат.', style: TextStyle(color: muted, fontSize: 12)),
-                const SizedBox(height: 30),
+                SizedBox(height: box.maxHeight < 480 ? 18 : 26),
                 Glass(
                   onTap: connect,
                   padding: const EdgeInsets.all(15),
@@ -245,7 +259,7 @@ class _Typing extends StatelessWidget {const _Typing();@override Widget build(Bu
 class _Composer extends StatelessWidget {
   const _Composer({required this.controller,required this.streaming,required this.send,required this.stop});
   final TextEditingController controller;final bool streaming;final VoidCallback send,stop;
-  @override Widget build(BuildContext context)=>Padding(padding:const EdgeInsets.fromLTRB(10,4,10,10),child:Glass(radius:21,padding:const EdgeInsets.all(9),child:Row(crossAxisAlignment:CrossAxisAlignment.end,children:[Expanded(child:TextField(controller:controller,minLines:1,maxLines:5,textInputAction:TextInputAction.newline,decoration:const InputDecoration(hintText:'Сообщение',filled:false,border:InputBorder.none,enabledBorder:InputBorder.none,focusedBorder:InputBorder.none,contentPadding:EdgeInsets.symmetric(horizontal:10,vertical:11)))),const SizedBox(width:7),ValueListenableBuilder<TextEditingValue>(valueListenable:controller,builder:(_,value,__)=>SizedBox.square(dimension:44,child:FilledButton(onPressed:streaming?stop:(value.text.trim().isEmpty?null:send),style:FilledButton.styleFrom(padding:EdgeInsets.zero,backgroundColor:accent,foregroundColor:ink,disabledBackgroundColor:const Color(0xFF252D38),shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(14))),child:Icon(streaming?Icons.stop_rounded:Icons.arrow_upward_rounded,size:20))))])));
+  @override Widget build(BuildContext context)=>Padding(padding:const EdgeInsets.fromLTRB(10,4,10,8),child:Glass(radius:19,padding:const EdgeInsets.all(7),blur:14,child:Row(crossAxisAlignment:CrossAxisAlignment.end,children:[Expanded(child:TextField(controller:controller,minLines:1,maxLines:4,textInputAction:TextInputAction.newline,scrollPadding:const EdgeInsets.only(bottom:100),decoration:const InputDecoration(hintText:'Сообщение',filled:false,border:InputBorder.none,enabledBorder:InputBorder.none,focusedBorder:InputBorder.none,contentPadding:EdgeInsets.symmetric(horizontal:11,vertical:10)))),const SizedBox(width:6),ValueListenableBuilder<TextEditingValue>(valueListenable:controller,builder:(_,value,__)=>SizedBox.square(dimension:42,child:FilledButton(onPressed:streaming?stop:(value.text.trim().isEmpty?null:send),style:FilledButton.styleFrom(padding:EdgeInsets.zero,backgroundColor:accent,foregroundColor:ink,disabledBackgroundColor:const Color(0xFF252D38),shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(13))),child:Icon(streaming?Icons.stop_rounded:Icons.arrow_upward_rounded,size:19))))])));
 }
 
 class _HistoryDrawer extends ConsumerWidget {

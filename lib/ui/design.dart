@@ -14,7 +14,7 @@ ThemeData nitronTheme() => ThemeData(
   scaffoldBackgroundColor: ink,
   colorScheme: const ColorScheme.dark(primary: accent, surface: surface, outline: line),
   textTheme: GoogleFonts.manropeTextTheme(ThemeData.dark().textTheme).apply(bodyColor: const Color(0xFFF2F4F7), displayColor: const Color(0xFFF2F4F7)),
-  splashFactory: InkSparkle.splashFactory,
+  splashFactory: InkRipple.splashFactory,
   inputDecorationTheme: InputDecorationTheme(
     filled: true, fillColor: const Color(0xFF141A23), contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
     hintStyle: const TextStyle(color: Color(0xFF657080), fontSize: 13),
@@ -33,22 +33,59 @@ class Glass extends StatelessWidget {
   final VoidCallback? onTap;
 
   @override Widget build(BuildContext context) {
-    final content = Container(
-      padding: padding,
+    final shape = RoundedRectangleBorder(borderRadius: BorderRadius.circular(radius));
+    return DecoratedBox(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(radius),
-        gradient: const LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [Color(0x2AFFFFFF), Color(0x1418212D), Color(0x19101721)]),
-        border: Border.all(color: const Color(0x32FFFFFF)),
-        boxShadow: const [BoxShadow(color: Color(0x66000000), blurRadius: 30, offset: Offset(0, 16))],
+        boxShadow: const [BoxShadow(color: Color(0x52000000), blurRadius: 24, offset: Offset(0, 12))],
       ),
-      child: Stack(children: [
-        Positioned.fill(child: IgnorePointer(child: DecoratedBox(decoration: BoxDecoration(borderRadius: BorderRadius.all(Radius.circular(radius)), gradient: const LinearGradient(begin: Alignment.topLeft, end: Alignment.center, colors: [Color(0x18FFFFFF), Colors.transparent]))))),
-        child,
-      ]),
-    );
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(radius),
-      child: BackdropFilter(filter: ImageFilter.blur(sigmaX: blur, sigmaY: blur), child: onTap == null ? content : Material(color: Colors.transparent, child: InkWell(onTap: onTap, borderRadius: BorderRadius.circular(radius), child: content))),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(radius),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: blur, sigmaY: blur),
+          child: Material(
+            color: Colors.transparent,
+            shape: shape,
+            child: Ink(
+              padding: padding,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(radius),
+                gradient: const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [Color(0x241F2A35), Color(0xD9121821), Color(0xE00D1219)],
+                ),
+                border: Border.all(color: const Color(0x2EFFFFFF)),
+              ),
+              child: InkWell(
+                onTap: onTap,
+                borderRadius: BorderRadius.circular(radius),
+                splashColor: accent.withValues(alpha: .08),
+                highlightColor: Colors.white.withValues(alpha: .025),
+                child: Stack(
+                  children: [
+                    Positioned.fill(
+                      child: IgnorePointer(
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.all(Radius.circular(radius)),
+                            gradient: const LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.center,
+                              colors: [Color(0x12FFFFFF), Colors.transparent],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    child,
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -78,5 +115,5 @@ class ProviderBadge extends StatelessWidget {
 class RoundButton extends StatelessWidget {
   const RoundButton({super.key, required this.icon, required this.onTap, this.size=44});
   final IconData icon; final VoidCallback onTap; final double size;
-  @override Widget build(BuildContext context) => SizedBox.square(dimension:size,child:Material(color:const Color(0xFF171D26),shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(14),side:const BorderSide(color:line)),child:InkWell(onTap:onTap,borderRadius:BorderRadius.circular(14),child:Icon(icon,size:20,color:const Color(0xFFB3BCC9)))));
+  @override Widget build(BuildContext context) => SizedBox.square(dimension:size,child:Material(color:const Color(0xFF151B24),shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(13),side:const BorderSide(color:line)),clipBehavior:Clip.antiAlias,child:InkWell(onTap:onTap,child:Icon(icon,size:19,color:const Color(0xFFB3BCC9)))));
 }

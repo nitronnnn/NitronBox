@@ -57,17 +57,17 @@ class _SheetShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final media = MediaQuery.of(context);
+    final availableHeight = media.size.height - media.viewInsets.bottom;
     return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+      padding: EdgeInsets.only(bottom: media.viewInsets.bottom),
       child: Glass(
         radius: 28,
         blur: 24,
         child: SafeArea(
           top: false,
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-              maxHeight: MediaQuery.sizeOf(context).height * .88,
-            ),
+          child: SizedBox(
+            height: (availableHeight * .86).clamp(320.0, 720.0),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -101,7 +101,7 @@ class _SheetShell extends StatelessWidget {
                     style: const TextStyle(color: muted, fontSize: 11),
                   ),
                 ),
-                Flexible(child: child),
+                Expanded(child: child),
               ],
             ),
           ),
@@ -331,9 +331,10 @@ class _ConnectionSheetState extends ConsumerState<_ConnectionSheet> {
               borderRadius: BorderRadius.circular(16),
               child: InkWell(
                 onTap: () {
+                  final rootContext = Navigator.of(context, rootNavigator: true).context;
                   Navigator.pop(context);
-                  Future<void>.delayed(Duration.zero, () {
-                    if (context.mounted) showProviders(context, ref);
+                  Future<void>.delayed(const Duration(milliseconds: 180), () {
+                    if (rootContext.mounted) showProviders(rootContext, ref);
                   });
                 },
                 borderRadius: BorderRadius.circular(16),
