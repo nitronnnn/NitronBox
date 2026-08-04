@@ -2,7 +2,7 @@
   "expo": {
     "name": "NitronBox",
     "slug": "nitronbox",
-    "version": "8.1.0",
+    "version": "8.2.0",
     "orientation": "portrait",
     "scheme": "nitronbox",
     "userInterfaceStyle": "automatic",
@@ -17,6 +17,7 @@
         "backgroundColor": "#000000"
       },
       "edgeToEdgeEnabled": true,
+      "softwareKeyboardLayoutMode": "resize",
       "predictiveBackGestureEnabled": true
     },
     "plugins": [

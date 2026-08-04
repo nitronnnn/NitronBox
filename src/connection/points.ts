@@ -11,6 +11,7 @@ export const initialConnectionPoints: ConnectionPoint[] = [
     health: 'online',
     latencyMs: 42,
     modelCount: null,
+    custom: false,
   },
   {
     id: 'anthropic',
@@ -22,6 +23,7 @@ export const initialConnectionPoints: ConnectionPoint[] = [
     health: 'online',
     latencyMs: 56,
     modelCount: null,
+    custom: false,
   },
   {
     id: 'gemini',
@@ -33,6 +35,7 @@ export const initialConnectionPoints: ConnectionPoint[] = [
     health: 'online',
     latencyMs: 48,
     modelCount: null,
+    custom: false,
   },
   {
     id: 'custom',
@@ -44,5 +47,6 @@ export const initialConnectionPoints: ConnectionPoint[] = [
     health: 'degraded',
     latencyMs: null,
     modelCount: null,
+    custom: true,
   },
 ];

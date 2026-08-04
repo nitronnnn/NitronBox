@@ -65,8 +65,19 @@ const fetchJson = async (url: string, init: RequestInit) => {
   return body;
 };
 
+const messageContent = (message: ChatMessage) => {
+  if (message.attachments.length === 0) return message.content;
+  const attached = message.attachments
+    .map((file) => {
+      const header = `\n\n[Attached file: ${file.name}]`;
+      return file.textContent ? `${header}\n${file.textContent}` : header;
+    })
+    .join('');
+  return `${message.content}${attached}`;
+};
+
 const modelMessages = (messages: ChatMessage[]) =>
-  messages.map(({ role, content }) => ({ role, content }));
+  messages.map((message) => ({ role: message.role, content: messageContent(message) }));
 
 export const httpConnectionGateway: ConnectionGateway = {
   async connect(request) {
@@ -90,6 +101,7 @@ export const httpConnectionGateway: ConnectionGateway = {
         body: JSON.stringify({
           model: request.model,
           max_tokens: 4096,
+          system: request.systemPrompt?.trim() || undefined,
           messages: modelMessages(request.messages),
         }),
       });
@@ -102,9 +114,12 @@ export const httpConnectionGateway: ConnectionGateway = {
         method: 'POST',
         headers: headers(request),
         body: JSON.stringify({
-          contents: request.messages.map(({ role, content }) => ({
-            role: role === 'assistant' ? 'model' : 'user',
-            parts: [{ text: content }],
+          systemInstruction: request.systemPrompt?.trim()
+            ? { parts: [{ text: request.systemPrompt.trim() }] }
+            : undefined,
+          contents: request.messages.map((message) => ({
+            role: message.role === 'assistant' ? 'model' : 'user',
+            parts: [{ text: messageContent(message) }],
           })),
         }),
       });
@@ -119,7 +134,12 @@ export const httpConnectionGateway: ConnectionGateway = {
       headers: headers(request),
       body: JSON.stringify({
         model: request.model,
-        messages: modelMessages(request.messages),
+        messages: [
+          ...(request.systemPrompt?.trim()
+            ? [{ role: 'system', content: request.systemPrompt.trim() }]
+            : []),
+          ...modelMessages(request.messages),
+        ],
         stream: false,
       }),
     });

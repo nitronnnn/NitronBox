@@ -1,0 +1,49 @@
+name: Android UI Screenshots
+
+on:
+  workflow_dispatch:
+
+jobs:
+  screenshots:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - run: npm ci
+      - run: npx expo prebuild --clean --platform android --no-install
+      - name: Build release APK
+        working-directory: android
+        run: ./gradlew assembleRelease
+      - name: Capture UI states
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          profile: pixel_6
+          script: |
+            mkdir -p screenshots
+            adb install -r android/app/build/outputs/apk/release/app-release.apk
+            adb shell am force-stop app.nitronbox.mobile
+            adb shell monkey -p app.nitronbox.mobile -c android.intent.category.LAUNCHER 1
+            sleep 5
+            adb exec-out screencap -p > screenshots/01-onboarding.png
+            adb shell input tap 1010 120
+            sleep 2
+            adb exec-out screencap -p > screenshots/02-settings.png
+            adb shell input tap 360 1030
+            adb shell input text visible_test_key
+            sleep 1
+            adb exec-out screencap -p > screenshots/03-keyboard.png
+            adb shell uiautomator dump /sdcard/window.xml
+            adb pull /sdcard/window.xml screenshots/window.xml
+      - uses: actions/upload-artifact@v4
+        with:
+          name: NitronBox-UI-screenshots
+          path: screenshots

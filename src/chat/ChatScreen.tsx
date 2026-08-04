@@ -1,5 +1,5 @@
-import { ArrowLeft, ArrowUp, Settings2 } from 'lucide-react-native';
-import { useMemo, useRef, useState } from 'react';
+import { ArrowUp, Menu, Paperclip, Settings2, X } from 'lucide-react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   FlatList,
   KeyboardAvoidingView,
@@ -10,12 +10,15 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import Markdown from 'react-native-markdown-display';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Symbol } from '@/components/Symbol';
 import { colors, radius, spacing } from '@/theme/semantic';
 import { useConnection } from '@/connection/store';
 import type { ChatMessage } from '@/connection/types';
+
+const textSizes = { compact: 14, default: 15, large: 17 } as const;
 
 export function ChatScreen() {
   const store = useConnection();
@@ -26,31 +29,35 @@ export function ChatScreen() {
 
   const send = () => {
     const content = draft.trim();
-    if (!content || store.sending) return;
+    if ((!content && store.pendingAttachments.length === 0) || store.sending) return;
     setDraft('');
     void store.sendMessage(content);
   };
 
   return (
     <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={0}
       style={[styles.root, { paddingTop: insets.top }]}
     >
       <View style={styles.navigation}>
         <Pressable
-          onPress={() => store.disconnect()}
+          testID="chat-menu-button"
+          onPress={() => store.setScreen('chats')}
           style={({ pressed }) => [styles.navigationButton, pressed && styles.pressed]}
         >
-          <ArrowLeft size={21} color={colors.label} />
+          <Menu size={21} color={colors.label} />
         </Pressable>
         <View style={styles.titleGroup}>
-          <Text style={styles.title}>NitronBox</Text>
+          <Text numberOfLines={1} style={styles.title}>
+            {store.activeThread?.title ?? 'New chat'}
+          </Text>
           <Text numberOfLines={1} style={styles.model}>
             {store.selectedModel}
           </Text>
         </View>
         <Pressable
-          onPress={() => store.setScreen('settings')}
+          onPress={() => store.setScreen('appSettings')}
           style={({ pressed }) => [styles.navigationButton, pressed && styles.pressed]}
         >
           <Settings2 size={20} color={colors.label} />
@@ -70,8 +77,9 @@ export function ChatScreen() {
           ref={listRef}
           data={data}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.messages}
+          contentContainerStyle={[styles.messages, { paddingBottom: 130 + insets.bottom }]}
           keyboardDismissMode="interactive"
+          keyboardShouldPersistTaps="handled"
           onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: true })}
           renderItem={({ item }) => <MessageBubble message={item} sending={store.sending} />}
         />
@@ -80,7 +88,33 @@ export function ChatScreen() {
       {store.message && <Text style={styles.error}>{store.message}</Text>}
 
       <View style={[styles.composerWrap, { paddingBottom: Math.max(insets.bottom, spacing.xs) }]}>
+        {store.pendingAttachments.length > 0 && (
+          <FlatList
+            horizontal
+            data={store.pendingAttachments}
+            keyExtractor={(file) => file.id}
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.attachmentList}
+            renderItem={({ item }) => (
+              <View style={styles.attachmentChip}>
+                <Text numberOfLines={1} style={styles.attachmentName}>
+                  {item.name}
+                </Text>
+                <Pressable onPress={() => store.removeAttachment(item.id)} hitSlop={8}>
+                  <X size={14} color={colors.secondaryLabel} />
+                </Pressable>
+              </View>
+            )}
+          />
+        )}
         <View style={styles.composer}>
+          <Pressable
+            testID="attach-file-button"
+            onPress={() => void store.pickAttachments()}
+            style={({ pressed }) => [styles.attach, pressed && styles.pressed]}
+          >
+            <Paperclip size={20} color={colors.secondaryLabel} />
+          </Pressable>
           <TextInput
             testID="chat-input"
             value={draft}
@@ -89,16 +123,19 @@ export function ChatScreen() {
             placeholderTextColor={colors.tertiaryLabel}
             multiline
             maxLength={12000}
+            scrollEnabled
+            textAlignVertical="top"
             style={styles.input}
           />
           <Pressable
             testID="chat-send-button"
-            disabled={!draft.trim() || store.sending}
+            disabled={(!draft.trim() && store.pendingAttachments.length === 0) || store.sending}
             onPress={send}
             style={({ pressed }) => [
               styles.send,
               pressed && styles.sendPressed,
-              (!draft.trim() || store.sending) && styles.disabled,
+              ((!draft.trim() && store.pendingAttachments.length === 0) || store.sending) &&
+                styles.disabled,
             ]}
           >
             <ArrowUp size={19} color="#FFFFFF" />
@@ -110,18 +147,64 @@ export function ChatScreen() {
 }
 
 function MessageBubble({ message, sending }: { message: ChatMessage; sending: boolean }) {
+  const store = useConnection();
   const user = message.role === 'user';
+  const fontSize = textSizes[store.settings.textScale];
   return (
     <View style={[styles.messageRow, user && styles.userRow]}>
       {!user && <View style={styles.assistantMark} />}
       <View style={[styles.bubble, user && styles.userBubble]}>
-        <Text style={[styles.messageText, user && styles.userText]}>
-          {message.content || (sending ? 'Thinking…' : '')}
-        </Text>
+        {message.attachments.map((file) => (
+          <View key={file.id} style={styles.messageAttachment}>
+            <Paperclip size={13} color={user ? '#FFFFFFCC' : colors.secondaryLabel} />
+            <Text numberOfLines={1} style={[styles.messageAttachmentText, user && styles.userText]}>
+              {file.name}
+            </Text>
+          </View>
+        ))}
+        {user ? (
+          <Text style={[styles.messageText, styles.userText, { fontSize }]}>
+            {message.content}
+          </Text>
+        ) : message.content ? (
+          <Markdown style={markdownStyles}>{message.content}</Markdown>
+        ) : (
+          <Text style={[styles.messageText, { fontSize }]}>{sending ? 'Thinking…' : ''}</Text>
+        )}
       </View>
     </View>
   );
 }
+
+const markdownStyles = StyleSheet.create({
+  body: { color: colors.label, fontSize: 15, lineHeight: 22 },
+  paragraph: { marginTop: 0, marginBottom: 9 },
+  heading1: { color: colors.label, fontSize: 24, lineHeight: 29, fontWeight: '700' },
+  heading2: { color: colors.label, fontSize: 20, lineHeight: 25, fontWeight: '700' },
+  heading3: { color: colors.label, fontSize: 17, lineHeight: 22, fontWeight: '600' },
+  code_inline: {
+    color: colors.label,
+    backgroundColor: colors.secondaryBackground,
+    borderRadius: 5,
+    paddingHorizontal: 5,
+  },
+  fence: {
+    color: colors.label,
+    backgroundColor: colors.secondaryBackground,
+    borderColor: colors.separator,
+    borderRadius: radius.control,
+    padding: spacing.sm,
+  },
+  blockquote: {
+    backgroundColor: colors.secondaryBackground,
+    borderLeftColor: colors.accent,
+    borderLeftWidth: 3,
+    paddingHorizontal: spacing.sm,
+  },
+  link: { color: colors.accent },
+  bullet_list: { marginVertical: 5 },
+  ordered_list: { marginVertical: 5 },
+});
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
@@ -135,7 +218,7 @@ const styles = StyleSheet.create({
   },
   navigationButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   titleGroup: { flex: 1, alignItems: 'center' },
-  title: { color: colors.label, fontSize: 16, fontWeight: '600' },
+  title: { maxWidth: 220, color: colors.label, fontSize: 16, fontWeight: '600' },
   model: { maxWidth: 220, color: colors.tertiaryLabel, fontSize: 10 },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingBottom: 70 },
   emptySymbol: {
@@ -152,25 +235,43 @@ const styles = StyleSheet.create({
   messageRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.xs },
   userRow: { justifyContent: 'flex-end' },
   assistantMark: { width: 7, height: 7, marginTop: 10, borderRadius: 4, backgroundColor: colors.accent },
-  bubble: { maxWidth: '88%', paddingHorizontal: spacing.sm, paddingVertical: 9 },
+  bubble: { maxWidth: '90%', paddingHorizontal: spacing.sm, paddingVertical: 9 },
   userBubble: { borderRadius: 18, backgroundColor: colors.accent },
-  messageText: { color: colors.label, fontSize: 15, lineHeight: 22 },
+  messageText: { color: colors.label, lineHeight: 22 },
   userText: { color: '#FFFFFF' },
+  messageAttachment: { flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 6 },
+  messageAttachmentText: { maxWidth: 230, color: colors.secondaryLabel, fontSize: 11 },
   error: { paddingHorizontal: spacing.md, paddingVertical: spacing.xs, color: colors.destructive, fontSize: 12 },
-  composerWrap: { paddingHorizontal: spacing.sm, paddingTop: spacing.xs },
+  composerWrap: {
+    paddingHorizontal: spacing.sm,
+    paddingTop: spacing.xs,
+    backgroundColor: colors.background,
+  },
+  attachmentList: { gap: spacing.xs, paddingBottom: spacing.xs },
+  attachmentChip: {
+    maxWidth: 220,
+    height: 32,
+    paddingHorizontal: spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    borderRadius: radius.pill,
+    backgroundColor: colors.secondaryBackground,
+  },
+  attachmentName: { flexShrink: 1, color: colors.label, fontSize: 11 },
   composer: {
-    minHeight: 50,
-    paddingLeft: spacing.md,
-    paddingRight: 5,
+    minHeight: 52,
+    paddingHorizontal: 5,
     flexDirection: 'row',
     alignItems: 'flex-end',
     borderRadius: 18,
     backgroundColor: colors.secondaryBackground,
   },
+  attach: { width: 42, height: 48, alignItems: 'center', justifyContent: 'center' },
   input: {
     flex: 1,
     minHeight: 48,
-    maxHeight: 130,
+    maxHeight: 128,
     paddingTop: 13,
     paddingBottom: 11,
     color: colors.label,
@@ -179,7 +280,7 @@ const styles = StyleSheet.create({
   send: {
     width: 40,
     height: 40,
-    marginBottom: 5,
+    marginBottom: 6,
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radius.control,

@@ -8,6 +8,16 @@ jest.mock('expo-haptics', () => ({
 
 jest.mock('react-native-reanimated', () => require('react-native-reanimated/mock'));
 
+jest.mock('@react-native-async-storage/async-storage', () =>
+  require('@react-native-async-storage/async-storage/jest/async-storage-mock'),
+);
+
+jest.mock('expo-document-picker', () => ({ getDocumentAsync: jest.fn() }));
+
+jest.mock('expo-file-system/legacy', () => ({
+  readAsStringAsync: jest.fn().mockResolvedValue('file text'),
+}));
+
 jest.mock('lucide-react-native', () => {
   const React = require('react');
   const { View } = require('react-native');
@@ -26,6 +36,13 @@ jest.mock('lucide-react-native', () => {
     ArrowUp: Icon,
     Check: Icon,
     ChevronDown: Icon,
+    Eye: Icon,
+    EyeOff: Icon,
+    Menu: Icon,
+    MessageSquarePlus: Icon,
+    Paperclip: Icon,
+    Plus: Icon,
+    Trash2: Icon,
   };
 });
 

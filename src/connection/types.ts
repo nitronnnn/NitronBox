@@ -11,6 +11,7 @@ export type ConnectionPoint = {
   health: PointHealth;
   latencyMs: number | null;
   modelCount: number | null;
+  custom?: boolean;
 };
 
 export type ConnectionSnapshot = {
@@ -28,6 +29,31 @@ export type ChatMessage = {
   id: string;
   role: 'user' | 'assistant';
   content: string;
+  attachments: Attachment[];
+};
+
+export type Attachment = {
+  id: string;
+  name: string;
+  uri: string;
+  mimeType: string | null;
+  size: number | null;
+  textContent?: string;
+};
+
+export type ChatThread = {
+  id: string;
+  title: string;
+  createdAt: number;
+  updatedAt: number;
+  messages: ChatMessage[];
+};
+
+export type AppSettings = {
+  colorScheme: 'system' | 'light' | 'dark';
+  haptics: boolean;
+  systemPrompt: string;
+  textScale: 'compact' | 'default' | 'large';
 };
 
 export type RealtimeConnectionSource = {
@@ -44,5 +70,11 @@ export type ConnectionGateway = {
   connect(
     request: ConnectRequest,
   ): Promise<Pick<ConnectionSnapshot, 'latencyMs' | 'modelCount' | 'models'>>;
-  sendMessage(request: ConnectRequest & { model: string; messages: ChatMessage[] }): Promise<string>;
+  sendMessage(
+    request: ConnectRequest & {
+      model: string;
+      messages: ChatMessage[];
+      systemPrompt?: string;
+    },
+  ): Promise<string>;
 };

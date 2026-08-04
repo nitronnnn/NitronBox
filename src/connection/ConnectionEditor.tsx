@@ -1,4 +1,12 @@
-import { ArrowLeft, Check, ChevronDown } from 'lucide-react-native';
+import {
+  ArrowLeft,
+  Check,
+  ChevronDown,
+  Eye,
+  EyeOff,
+  Plus,
+  Trash2,
+} from 'lucide-react-native';
 import { useState } from 'react';
 import {
   KeyboardAvoidingView,
@@ -21,6 +29,10 @@ export function ConnectionEditor() {
   const store = useConnection();
   const insets = useSafeAreaInsets();
   const [showModels, setShowModels] = useState(false);
+  const [keyVisible, setKeyVisible] = useState(false);
+  const [addingCustom, setAddingCustom] = useState(false);
+  const [customName, setCustomName] = useState('');
+  const [customUrl, setCustomUrl] = useState('');
 
   if (store.screen !== 'settings') return null;
 
@@ -73,6 +85,15 @@ export function ConnectionEditor() {
                       <Text style={styles.providerName}>{point.name}</Text>
                       <Text style={styles.providerDetail}>{point.detail}</Text>
                     </View>
+                    {point.custom && point.id !== 'custom' && (
+                      <Pressable
+                        hitSlop={10}
+                        onPress={() => store.deleteCustomProvider(point.id)}
+                        style={({ pressed }) => pressed && styles.pressed}
+                      >
+                        <Trash2 size={17} color={colors.tertiaryLabel} />
+                      </Pressable>
+                    )}
                     {selected && <Check size={19} color={colors.accent} />}
                   </Pressable>
                   {index < store.points.length - 1 && <View style={styles.separator} />}
@@ -81,19 +102,92 @@ export function ConnectionEditor() {
             })}
           </View>
 
+          {addingCustom ? (
+            <View style={styles.customForm}>
+              <TextInput
+                testID="custom-provider-name"
+                value={customName}
+                onChangeText={setCustomName}
+                placeholder="Provider name"
+                placeholderTextColor={colors.tertiaryLabel}
+                style={styles.input}
+              />
+              <TextInput
+                testID="custom-provider-url"
+                value={customUrl}
+                onChangeText={setCustomUrl}
+                placeholder="https://api.example.com"
+                placeholderTextColor={colors.tertiaryLabel}
+                autoCapitalize="none"
+                keyboardType="url"
+                style={[styles.input, styles.secondaryInput]}
+              />
+              <View style={styles.customActions}>
+                <Pressable
+                  accessibilityLabel="Cancel custom provider"
+                  onPress={() => setAddingCustom(false)}
+                  style={({ pressed }) => [styles.secondaryAction, pressed && styles.pressed]}
+                >
+                  <Text style={styles.secondaryActionText}>Cancel</Text>
+                </Pressable>
+                <Pressable
+                  testID="save-custom-provider"
+                  accessibilityLabel="Save custom provider"
+                  disabled={!customName.trim() || !customUrl.trim()}
+                  onPress={() => {
+                    store.createCustomProvider(customName, customUrl);
+                    setCustomName('');
+                    setCustomUrl('');
+                    setAddingCustom(false);
+                  }}
+                  style={({ pressed }) => [
+                    styles.customSave,
+                    pressed && styles.primaryPressed,
+                    (!customName.trim() || !customUrl.trim()) && styles.disabled,
+                  ]}
+                >
+                  <Text style={styles.customSaveText}>Add provider</Text>
+                </Pressable>
+              </View>
+            </View>
+          ) : (
+            <Pressable
+              testID="add-custom-provider"
+              onPress={() => setAddingCustom(true)}
+              style={({ pressed }) => [styles.addProvider, pressed && styles.pressed]}
+            >
+              <Plus size={17} color={colors.accent} />
+              <Text style={styles.addProviderText}>Add custom provider</Text>
+            </Pressable>
+          )}
+
           <Text style={styles.sectionLabel}>Credentials</Text>
-          <TextInput
-            key={store.selectedPointId}
-            testID="api-key-input"
-            value={store.selectedKey}
-            onChangeText={store.setKey}
-            placeholder={store.selectedPoint.keyHint}
-            placeholderTextColor={colors.tertiaryLabel}
-            autoCapitalize="none"
-            autoCorrect={false}
-            secureTextEntry
-            style={styles.input}
-          />
+          <View style={styles.keyField}>
+            <TextInput
+              key={store.selectedPointId}
+              testID="api-key-input"
+              value={store.selectedKey}
+              onChangeText={store.setKey}
+              placeholder={store.selectedPoint.keyHint}
+              placeholderTextColor={colors.tertiaryLabel}
+              autoCapitalize="none"
+              autoCorrect={false}
+              secureTextEntry={!keyVisible}
+              style={styles.keyInput}
+            />
+            <Pressable
+              testID="toggle-api-key"
+              accessibilityLabel={keyVisible ? 'Hide API key' : 'Show API key'}
+              onPress={() => setKeyVisible((value) => !value)}
+              style={({ pressed }) => [styles.eyeButton, pressed && styles.pressed]}
+            >
+              {keyVisible ? (
+                <EyeOff size={19} color={colors.secondaryLabel} />
+              ) : (
+                <Eye size={19} color={colors.secondaryLabel} />
+              )}
+            </Pressable>
+          </View>
           {store.selectedPoint.id === 'custom' && (
             <TextInput
               testID="base-url-input"
@@ -208,6 +302,33 @@ const styles = StyleSheet.create({
   providerName: { color: colors.label, fontSize: 15, fontWeight: '500' },
   providerDetail: { color: colors.tertiaryLabel, fontSize: 11 },
   separator: { height: StyleSheet.hairlineWidth, marginLeft: 44, backgroundColor: colors.separator },
+  addProvider: {
+    height: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  addProviderText: { color: colors.accent, fontSize: 14, fontWeight: '500' },
+  customForm: { marginTop: spacing.sm },
+  customActions: { marginTop: spacing.xs, flexDirection: 'row', gap: spacing.xs },
+  secondaryAction: {
+    flex: 1,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.control,
+    backgroundColor: colors.secondaryBackground,
+  },
+  secondaryActionText: { color: colors.label, fontSize: 14, fontWeight: '500' },
+  customSave: {
+    flex: 1,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.control,
+    backgroundColor: colors.accent,
+  },
+  customSaveText: { color: '#FFFFFF', fontSize: 14, fontWeight: '600' },
   input: {
     height: 50,
     paddingHorizontal: spacing.md,
@@ -216,6 +337,21 @@ const styles = StyleSheet.create({
     backgroundColor: colors.secondaryBackground,
     fontSize: 16,
   },
+  keyField: {
+    height: 50,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: radius.control,
+    backgroundColor: colors.secondaryBackground,
+  },
+  keyInput: {
+    flex: 1,
+    height: 50,
+    paddingLeft: spacing.md,
+    color: colors.label,
+    fontSize: 16,
+  },
+  eyeButton: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center' },
   secondaryInput: { marginTop: spacing.xs },
   modelControl: {
     height: 50,
