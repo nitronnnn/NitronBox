@@ -29,16 +29,6 @@ jest.mock('expo-secure-store', () => ({
   deleteItemAsync: jest.fn().mockResolvedValue(undefined),
   WHEN_UNLOCKED_THIS_DEVICE_ONLY: 'WHEN_UNLOCKED_THIS_DEVICE_ONLY',
 }));
-jest.mock('react-native-keyboard-controller', () => {
-  const React = require('react');
-  const { View } = require('react-native');
-  return {
-    KeyboardProvider: ({ children }: { children?: React.ReactNode }) => children,
-    KeyboardAvoidingView: ({ children, style }: { children?: React.ReactNode; style?: unknown }) =>
-      React.createElement(View, { style }, children),
-  };
-});
-
 jest.mock('lucide-react-native', () => {
   const React = require('react');
   const { View } = require('react-native');

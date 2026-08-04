@@ -1,18 +1,17 @@
 import {
   DynamicColorIOS,
   Platform,
-  PlatformColor,
   type ColorValue,
 } from 'react-native';
 
 const dynamic = (
   light: string,
   dark: string,
-  androidResource: string,
+  _androidResource: string,
 ): ColorValue =>
   Platform.OS === 'ios'
     ? DynamicColorIOS({ light, dark })
-    : PlatformColor(androidResource);
+    : light;
 
 export const colors = {
   background: dynamic('#FFFFFF', '#000000', '?attr/colorBackground'),

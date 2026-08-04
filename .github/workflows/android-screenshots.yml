@@ -28,13 +28,9 @@ jobs:
           arch: x86_64
           profile: pixel_6
           script: |
-            mkdir -p screenshots
-            adb install -r android/app/build/outputs/apk/release/app-release.apk
-            curl -Ls "https://get.maestro.mobile.dev" | bash
-            "$HOME/.maestro/bin/maestro" test .maestro/visual.yaml
-            adb shell uiautomator dump /sdcard/window.xml
-            adb pull /sdcard/window.xml screenshots/window.xml
+            bash .github/scripts/android-smoke.sh
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: NitronBox-UI-screenshots
           path: screenshots

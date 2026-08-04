@@ -2,7 +2,7 @@
   "expo": {
     "name": "NitronBox",
     "slug": "nitronbox",
-    "version": "8.3.0",
+    "version": "8.3.1",
     "orientation": "portrait",
     "scheme": "nitronbox",
     "userInterfaceStyle": "automatic",

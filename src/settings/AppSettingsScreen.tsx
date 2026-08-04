@@ -1,5 +1,7 @@
 import { ArrowLeft, Check } from 'lucide-react-native';
 import {
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -9,7 +11,6 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 
 import { useConnection } from '@/connection/store';
 import { colors, radius, spacing } from '@/theme/semantic';
@@ -37,7 +38,10 @@ export function AppSettingsScreen() {
         <View style={styles.navigationButton} />
       </View>
 
-      <KeyboardAvoidingView behavior="padding" automaticOffset style={styles.flex}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={styles.flex}
+      >
       <ScrollView keyboardDismissMode="interactive" contentContainerStyle={styles.content}>
         <Text style={styles.hero}>Make it yours.</Text>
 

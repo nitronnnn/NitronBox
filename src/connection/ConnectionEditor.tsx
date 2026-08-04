@@ -9,6 +9,8 @@ import {
 } from 'lucide-react-native';
 import { useState } from 'react';
 import {
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -18,7 +20,6 @@ import {
 } from 'react-native';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 
 import { Symbol } from '@/components/Symbol';
 import { colors, radius, spacing } from '@/theme/semantic';
@@ -56,14 +57,17 @@ export function ConnectionEditor() {
         <View style={styles.navigationButton} />
       </View>
 
-      <KeyboardAvoidingView behavior="padding" automaticOffset style={styles.flex}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={styles.flex}
+      >
         <ScrollView
           keyboardDismissMode="interactive"
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={styles.content}
         >
           <Text style={styles.hero}>Connect your model provider.</Text>
-          <Text style={styles.subtitle}>Credentials stay in memory until the app closes.</Text>
+          <Text style={styles.subtitle}>Credentials are encrypted in your device keychain.</Text>
 
           <Text style={styles.sectionLabel}>Provider</Text>
           <View style={styles.providerList}>

@@ -4,6 +4,8 @@ import * as Haptics from 'expo-haptics';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   FlatList,
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -12,7 +14,6 @@ import {
 } from 'react-native';
 import Markdown from 'react-native-markdown-display';
 import Animated, { FadeInDown, FadeOut, LinearTransition } from 'react-native-reanimated';
-import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Symbol } from '@/components/Symbol';
@@ -38,8 +39,7 @@ export function ChatScreen() {
 
   return (
     <KeyboardAvoidingView
-      behavior="translate-with-padding"
-      automaticOffset
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       style={[styles.root, { paddingTop: insets.top }]}
     >
       <View style={styles.navigation}>
