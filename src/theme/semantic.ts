@@ -1,21 +1,36 @@
-import { DynamicColorIOS, Platform, type ColorValue } from 'react-native';
+import {
+  DynamicColorIOS,
+  Platform,
+  PlatformColor,
+  type ColorValue,
+} from 'react-native';
 
-const dynamic = (light: string, dark: string): ColorValue =>
-  Platform.OS === 'ios' ? DynamicColorIOS({ light, dark }) : dark;
+const dynamic = (
+  light: string,
+  dark: string,
+  androidResource: string,
+): ColorValue =>
+  Platform.OS === 'ios'
+    ? DynamicColorIOS({ light, dark })
+    : PlatformColor(androidResource);
 
 export const colors = {
-  background: dynamic('#FFFFFF', '#000000'),
-  secondaryBackground: dynamic('#F2F2F7', '#1C1C1E'),
-  tertiaryBackground: dynamic('#FFFFFF', '#2C2C2E'),
-  label: dynamic('#000000', '#FFFFFF'),
-  secondaryLabel: dynamic('#3C3C4399', '#EBEBF599'),
-  tertiaryLabel: dynamic('#3C3C434D', '#EBEBF54D'),
-  separator: dynamic('#3C3C434A', '#54545899'),
-  fill: dynamic('#78788029', '#7878805C'),
-  accent: dynamic('#007AFF', '#0A84FF'),
-  success: dynamic('#248A3D', '#30D158'),
-  warning: dynamic('#B25000', '#FF9F0A'),
-  destructive: dynamic('#FF3B30', '#FF453A'),
+  background: dynamic('#FFFFFF', '#000000', '?attr/colorBackground'),
+  secondaryBackground: dynamic(
+    '#F2F2F7',
+    '#1C1C1E',
+    '?attr/colorBackgroundFloating',
+  ),
+  tertiaryBackground: dynamic('#FFFFFF', '#2C2C2E', '?attr/colorBackground'),
+  label: dynamic('#000000', '#FFFFFF', '?attr/textColorPrimary'),
+  secondaryLabel: dynamic('#3C3C4399', '#EBEBF599', '?attr/textColorSecondary'),
+  tertiaryLabel: dynamic('#3C3C434D', '#EBEBF54D', '?attr/textColorTertiary'),
+  separator: dynamic('#3C3C434A', '#54545899', '?attr/colorControlNormal'),
+  fill: dynamic('#78788029', '#7878805C', '?attr/colorControlHighlight'),
+  accent: dynamic('#007AFF', '#0A84FF', '?attr/colorAccent'),
+  success: dynamic('#248A3D', '#30D158', '@android:color/holo_green_light'),
+  warning: dynamic('#B25000', '#FF9F0A', '@android:color/holo_orange_light'),
+  destructive: dynamic('#FF3B30', '#FF453A', '@android:color/holo_red_light'),
 } as const;
 
 export const spacing = {

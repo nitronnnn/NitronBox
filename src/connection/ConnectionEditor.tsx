@@ -9,8 +9,6 @@ import {
 } from 'lucide-react-native';
 import { useState } from 'react';
 import {
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -20,6 +18,7 @@ import {
 } from 'react-native';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 
 import { Symbol } from '@/components/Symbol';
 import { colors, radius, spacing } from '@/theme/semantic';
@@ -46,7 +45,9 @@ export function ConnectionEditor() {
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Back"
-          onPress={() => store.setScreen(store.phase === 'connected' ? 'chat' : 'connect')}
+          onPress={() =>
+            store.setScreen(store.selectedModel || store.activeThread ? 'chat' : 'connect')
+          }
           style={({ pressed }) => [styles.navigationButton, pressed && styles.pressed]}
         >
           <ArrowLeft size={21} color={colors.label} />
@@ -55,10 +56,7 @@ export function ConnectionEditor() {
         <View style={styles.navigationButton} />
       </View>
 
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={styles.flex}
-      >
+      <KeyboardAvoidingView behavior="padding" automaticOffset style={styles.flex}>
         <ScrollView
           keyboardDismissMode="interactive"
           keyboardShouldPersistTaps="handled"
@@ -166,6 +164,7 @@ export function ConnectionEditor() {
             <TextInput
               key={store.selectedPointId}
               testID="api-key-input"
+              accessibilityLabel="API key"
               value={store.selectedKey}
               onChangeText={store.setKey}
               placeholder={store.selectedPoint.keyHint}

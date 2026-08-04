@@ -30,17 +30,9 @@ jobs:
           script: |
             mkdir -p screenshots
             adb install -r android/app/build/outputs/apk/release/app-release.apk
-            adb shell am force-stop app.nitronbox.mobile
-            adb shell monkey -p app.nitronbox.mobile -c android.intent.category.LAUNCHER 1
-            sleep 5
-            adb exec-out screencap -p > screenshots/01-onboarding.png
-            adb shell input tap 1010 120
-            sleep 2
-            adb exec-out screencap -p > screenshots/02-settings.png
-            adb shell input tap 360 1030
-            adb shell input text visible_test_key
-            sleep 1
-            adb exec-out screencap -p > screenshots/03-keyboard.png
+            curl -Ls "https://get.maestro.mobile.dev" | bash
+            export PATH="$PATH:$HOME/.maestro/bin"
+            maestro test .maestro/visual.yaml
             adb shell uiautomator dump /sdcard/window.xml
             adb pull /sdcard/window.xml screenshots/window.xml
       - uses: actions/upload-artifact@v4

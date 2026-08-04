@@ -9,6 +9,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 
 import { useConnection } from '@/connection/store';
 import { colors, radius, spacing } from '@/theme/semantic';
@@ -25,7 +26,9 @@ export function AppSettingsScreen() {
     <View style={[styles.root, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
       <View style={styles.navigation}>
         <Pressable
-          onPress={() => store.setScreen(store.phase === 'connected' ? 'chat' : 'connect')}
+          onPress={() =>
+            store.setScreen(store.selectedModel || store.activeThread ? 'chat' : 'connect')
+          }
           style={({ pressed }) => [styles.navigationButton, pressed && styles.pressed]}
         >
           <ArrowLeft size={21} color={colors.label} />
@@ -34,10 +37,8 @@ export function AppSettingsScreen() {
         <View style={styles.navigationButton} />
       </View>
 
-      <ScrollView
-        keyboardDismissMode="interactive"
-        contentContainerStyle={styles.content}
-      >
+      <KeyboardAvoidingView behavior="padding" automaticOffset style={styles.flex}>
+      <ScrollView keyboardDismissMode="interactive" contentContainerStyle={styles.content}>
         <Text style={styles.hero}>Make it yours.</Text>
 
         <Text style={styles.sectionLabel}>Appearance</Text>
@@ -99,12 +100,14 @@ export function AppSettingsScreen() {
           Chat history and custom providers are stored locally. API keys are never persisted.
         </Text>
       </ScrollView>
+      </KeyboardAvoidingView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
+  flex: { flex: 1 },
   navigation: {
     height: 54,
     paddingHorizontal: spacing.sm,

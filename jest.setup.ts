@@ -18,6 +18,27 @@ jest.mock('expo-file-system/legacy', () => ({
   readAsStringAsync: jest.fn().mockResolvedValue('file text'),
 }));
 
+jest.mock('expo-clipboard', () => ({ setStringAsync: jest.fn() }));
+jest.mock('expo-navigation-bar', () => ({
+  setBackgroundColorAsync: jest.fn(),
+  setButtonStyleAsync: jest.fn(),
+}));
+jest.mock('expo-secure-store', () => ({
+  getItemAsync: jest.fn().mockResolvedValue(null),
+  setItemAsync: jest.fn().mockResolvedValue(undefined),
+  deleteItemAsync: jest.fn().mockResolvedValue(undefined),
+  WHEN_UNLOCKED_THIS_DEVICE_ONLY: 'WHEN_UNLOCKED_THIS_DEVICE_ONLY',
+}));
+jest.mock('react-native-keyboard-controller', () => {
+  const React = require('react');
+  const { View } = require('react-native');
+  return {
+    KeyboardProvider: ({ children }: { children?: React.ReactNode }) => children,
+    KeyboardAvoidingView: ({ children, style }: { children?: React.ReactNode; style?: unknown }) =>
+      React.createElement(View, { style }, children),
+  };
+});
+
 jest.mock('lucide-react-native', () => {
   const React = require('react');
   const { View } = require('react-native');
@@ -43,6 +64,7 @@ jest.mock('lucide-react-native', () => {
     Paperclip: Icon,
     Plus: Icon,
     Trash2: Icon,
+    Copy: Icon,
   };
 });
 

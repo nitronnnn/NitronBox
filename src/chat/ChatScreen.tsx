@@ -1,9 +1,9 @@
-import { ArrowUp, Menu, Paperclip, Settings2, X } from 'lucide-react-native';
+import { ArrowUp, Check, Copy, Menu, Paperclip, Settings2, X } from 'lucide-react-native';
+import * as Clipboard from 'expo-clipboard';
+import * as Haptics from 'expo-haptics';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   FlatList,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -11,6 +11,8 @@ import {
   View,
 } from 'react-native';
 import Markdown from 'react-native-markdown-display';
+import Animated, { FadeInDown, FadeOut, LinearTransition } from 'react-native-reanimated';
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Symbol } from '@/components/Symbol';
@@ -36,8 +38,8 @@ export function ChatScreen() {
 
   return (
     <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={0}
+      behavior="translate-with-padding"
+      automaticOffset
       style={[styles.root, { paddingTop: insets.top }]}
     >
       <View style={styles.navigation}>
@@ -81,7 +83,15 @@ export function ChatScreen() {
           keyboardDismissMode="interactive"
           keyboardShouldPersistTaps="handled"
           onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: true })}
-          renderItem={({ item }) => <MessageBubble message={item} sending={store.sending} />}
+          renderItem={({ item, index }) => (
+            <Animated.View
+              entering={FadeInDown.delay(Math.min(index * 18, 120)).springify().damping(20)}
+              exiting={FadeOut.duration(120)}
+              layout={LinearTransition.springify().damping(20)}
+            >
+              <MessageBubble message={item} sending={store.sending} />
+            </Animated.View>
+          )}
         />
       )}
 
@@ -149,11 +159,25 @@ export function ChatScreen() {
 function MessageBubble({ message, sending }: { message: ChatMessage; sending: boolean }) {
   const store = useConnection();
   const user = message.role === 'user';
+  const [copied, setCopied] = useState(false);
   const fontSize = textSizes[store.settings.textScale];
+  const copy = async () => {
+    if (!message.content) return;
+    await Clipboard.setStringAsync(message.content);
+    setCopied(true);
+    if (store.settings.haptics) {
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    }
+    setTimeout(() => setCopied(false), 1200);
+  };
   return (
     <View style={[styles.messageRow, user && styles.userRow]}>
       {!user && <View style={styles.assistantMark} />}
-      <View style={[styles.bubble, user && styles.userBubble]}>
+      <Pressable
+        onLongPress={() => void copy()}
+        delayLongPress={350}
+        style={[styles.bubble, user && styles.userBubble]}
+      >
         {message.attachments.map((file) => (
           <View key={file.id} style={styles.messageAttachment}>
             <Paperclip size={13} color={user ? '#FFFFFFCC' : colors.secondaryLabel} />
@@ -171,7 +195,24 @@ function MessageBubble({ message, sending }: { message: ChatMessage; sending: bo
         ) : (
           <Text style={[styles.messageText, { fontSize }]}>{sending ? 'Thinking…' : ''}</Text>
         )}
-      </View>
+        {!user && message.content ? (
+          <Pressable
+            testID={`copy-message-${message.id}`}
+            accessibilityLabel="Copy response"
+            onPress={() => void copy()}
+            style={({ pressed }) => [styles.copyButton, pressed && styles.pressed]}
+          >
+            {copied ? (
+              <Check size={14} color={colors.success} />
+            ) : (
+              <Copy size={14} color={colors.tertiaryLabel} />
+            )}
+            <Text style={[styles.copyText, copied && { color: colors.success }]}>
+              {copied ? 'Copied' : 'Copy'}
+            </Text>
+          </Pressable>
+        ) : null}
+      </Pressable>
     </View>
   );
 }
@@ -241,6 +282,15 @@ const styles = StyleSheet.create({
   userText: { color: '#FFFFFF' },
   messageAttachment: { flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 6 },
   messageAttachmentText: { maxWidth: 230, color: colors.secondaryLabel, fontSize: 11 },
+  copyButton: {
+    alignSelf: 'flex-start',
+    height: 30,
+    marginTop: 4,
+    paddingHorizontal: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  copyText: { color: colors.tertiaryLabel, fontSize: 11 },
   error: { paddingHorizontal: spacing.md, paddingVertical: spacing.xs, color: colors.destructive, fontSize: 12 },
   composerWrap: {
     paddingHorizontal: spacing.sm,

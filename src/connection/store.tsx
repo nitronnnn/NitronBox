@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Haptics from 'expo-haptics';
+import * as SecureStore from 'expo-secure-store';
 import {
   createContext,
   useCallback,
@@ -26,7 +27,9 @@ import type {
   RealtimeConnectionSource,
 } from './types';
 
-const STORAGE_KEY = 'nitronbox-state-v1';
+const STORAGE_KEY = 'nitronbox-state-v2';
+const LEGACY_STORAGE_KEY = 'nitronbox-state-v1';
+const SECURE_KEYS_KEY = 'nitronbox-api-keys-v1';
 const defaultSettings: AppSettings = {
   colorScheme: 'system',
   haptics: true,
@@ -52,10 +55,18 @@ type State = ConnectionSnapshot & {
 type PersistedState = Pick<
   State,
   'points' | 'selectedPointId' | 'customBaseUrls' | 'threads' | 'activeThreadId' | 'settings'
->;
+> & {
+  selectedModel?: string | null;
+  models?: string[];
+  lastScreen?: 'connect' | 'chat' | 'chats';
+};
 
 type Action =
-  | { type: 'hydrate'; payload: Partial<PersistedState> }
+  | {
+      type: 'hydrate';
+      payload: Partial<PersistedState>;
+      apiKeys: Record<string, string>;
+    }
   | { type: 'select'; pointId: string }
   | { type: 'key'; pointId: string; value: string }
   | { type: 'baseUrl'; pointId: string; value: string }
@@ -109,7 +120,18 @@ const updateThread = (
 const reducer = (state: State, action: Action): State => {
   switch (action.type) {
     case 'hydrate':
-      return { ...state, ...action.payload, apiKeys: {}, hydrated: true };
+      return {
+        ...state,
+        ...action.payload,
+        apiKeys: action.apiKeys,
+        screen:
+          action.payload.lastScreen === 'chat' ||
+          Boolean(action.payload.activeThreadId) ||
+          Boolean(action.payload.selectedModel)
+            ? 'chat'
+            : action.payload.lastScreen ?? 'connect',
+        hydrated: true,
+      };
     case 'select':
       return { ...state, selectedPointId: action.pointId, models: [], selectedModel: null, message: null };
     case 'key':
@@ -284,12 +306,17 @@ export function ConnectionProvider({
     state.threads.find((thread) => thread.id === state.activeThreadId) ?? null;
 
   useEffect(() => {
-    void AsyncStorage.getItem(STORAGE_KEY)
-      .then((raw) => {
-        if (!raw) return dispatch({ type: 'hydrate', payload: {} });
-        dispatch({ type: 'hydrate', payload: JSON.parse(raw) as PersistedState });
+    void Promise.all([
+      AsyncStorage.getItem(STORAGE_KEY),
+      AsyncStorage.getItem(LEGACY_STORAGE_KEY),
+      SecureStore.getItemAsync(SECURE_KEYS_KEY),
+    ])
+      .then(([raw, legacyRaw, secureRaw]) => {
+        const payload = JSON.parse(raw ?? legacyRaw ?? '{}') as Partial<PersistedState>;
+        const apiKeys = JSON.parse(secureRaw ?? '{}') as Record<string, string>;
+        dispatch({ type: 'hydrate', payload, apiKeys });
       })
-      .catch(() => dispatch({ type: 'hydrate', payload: {} }));
+      .catch(() => dispatch({ type: 'hydrate', payload: {}, apiKeys: {} }));
   }, []);
 
   useEffect(() => {
@@ -301,6 +328,10 @@ export function ConnectionProvider({
       threads: state.threads,
       activeThreadId: state.activeThreadId,
       settings: state.settings,
+      selectedModel: state.selectedModel,
+      models: state.models,
+      lastScreen:
+        state.screen === 'settings' || state.screen === 'appSettings' ? undefined : state.screen,
     };
     void AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(persisted));
   }, [
@@ -308,10 +339,24 @@ export function ConnectionProvider({
     state.customBaseUrls,
     state.hydrated,
     state.points,
+    state.models,
+    state.screen,
     state.selectedPointId,
+    state.selectedModel,
     state.settings,
     state.threads,
   ]);
+
+  useEffect(() => {
+    if (!state.hydrated) return;
+    if (Object.keys(state.apiKeys).length === 0) {
+      void SecureStore.deleteItemAsync(SECURE_KEYS_KEY);
+    } else {
+      void SecureStore.setItemAsync(SECURE_KEYS_KEY, JSON.stringify(state.apiKeys), {
+        keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
+      });
+    }
+  }, [state.apiKeys, state.hydrated]);
 
   useEffect(
     () => realtimeSource.subscribe((patch) => dispatch({ type: 'realtime', patch })),
@@ -356,6 +401,11 @@ export function ConnectionProvider({
       const content = raw.trim();
       if ((!content && state.pendingAttachments.length === 0) || state.sending || !state.selectedModel)
         return;
+      if (!selectedKey) {
+        dispatch({ type: 'screen', screen: 'settings' });
+        dispatch({ type: 'error', message: 'Enter the API key to continue this chat.' });
+        return;
+      }
 
       let thread = activeThread;
       if (!thread) {
