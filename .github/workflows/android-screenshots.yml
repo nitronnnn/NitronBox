@@ -31,8 +31,7 @@ jobs:
             mkdir -p screenshots
             adb install -r android/app/build/outputs/apk/release/app-release.apk
             curl -Ls "https://get.maestro.mobile.dev" | bash
-            export PATH="$PATH:$HOME/.maestro/bin"
-            maestro test .maestro/visual.yaml
+            "$HOME/.maestro/bin/maestro" test .maestro/visual.yaml
             adb shell uiautomator dump /sdcard/window.xml
             adb pull /sdcard/window.xml screenshots/window.xml
       - uses: actions/upload-artifact@v4
