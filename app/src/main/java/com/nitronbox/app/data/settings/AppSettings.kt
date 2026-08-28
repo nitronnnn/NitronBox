@@ -134,13 +134,13 @@ class AppSettings(private val context: Context) {
 
     // --- Background effects ---
 
-    val blurEnabled: Flow<Boolean> = context.dataStore.data.map { it[KEY_BLUR_ENABLED] != false }
+    val blurEnabled: Flow<Boolean> = context.dataStore.data.map { it[KEY_BLUR_ENABLED] == true }
 
     /** Maximum blur radius in dp for panel overlays. */
     val blurStrength: Flow<Float> = context.dataStore.data.map { it[KEY_BLUR_STRENGTH] ?: 18f }
 
     /** When true, panels themselves are translucent frosted instead of solid. */
-    val blurredPanels: Flow<Boolean> = context.dataStore.data.map { it[KEY_BLUR_PANELS] != false }
+    val blurredPanels: Flow<Boolean> = context.dataStore.data.map { it[KEY_BLUR_PANELS] == true }
 
     /** Separate blur radius for frosted panels (dp). */
     val panelBlurStrength: Flow<Float> = context.dataStore.data.map { it[KEY_PANEL_BLUR_STRENGTH] ?: 24f }

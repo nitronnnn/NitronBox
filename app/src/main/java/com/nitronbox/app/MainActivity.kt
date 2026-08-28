@@ -37,7 +37,7 @@ class MainActivity : ComponentActivity() {
             val language by container.appSettings.language.collectAsState(com.nitronbox.app.data.settings.LanguageSetting.SYSTEM)
             val blurEnabled by container.appSettings.blurEnabled.collectAsState(true)
             val blurStrength by container.appSettings.blurStrength.collectAsState(18f)
-            val blurredPanels by container.appSettings.blurredPanels.collectAsState(true)
+            val blurredPanels by container.appSettings.blurredPanels.collectAsState(false)
             val panelBlurStrength by container.appSettings.panelBlurStrength.collectAsState(24f)
             val strings = remember(language) { stringsFor(language) }
 

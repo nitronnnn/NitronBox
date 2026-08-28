@@ -75,13 +75,13 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
     }
 
     val blurEnabled: StateFlow<Boolean> = container.appSettings.blurEnabled
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
 
     val blurStrength: StateFlow<Float> = container.appSettings.blurStrength
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 18f)
 
     val blurredPanels: StateFlow<Boolean> = container.appSettings.blurredPanels
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
 
     val panelBlurStrength: StateFlow<Float> = container.appSettings.panelBlurStrength
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 24f)

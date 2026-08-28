@@ -540,13 +540,10 @@ private fun WelcomeCard(
     onConfigureModels: () -> Unit,
 ) {
     val strings = LocalStrings.current
-    FrostSurface(
-        NitronTheme.shapes.large,
-        Modifier.fillMaxWidth(),
-    ) {
     Column(
         Modifier
             .fillMaxWidth()
+            .frostPanel(NitronTheme.shapes.large)
             .padding(20.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -578,7 +575,6 @@ private fun WelcomeCard(
             }
         }
     }
-    }   // FrostSurface
 }
 
 @Composable
@@ -603,14 +599,14 @@ private fun MessageBubble(
         Modifier.fillMaxWidth(),
         horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start,
     ) {
-        FrostSurface(
-            NitronTheme.shapes.large,
-            Modifier
-                .widthIn(max = 640.dp)
-                .fillMaxWidth(if (isUser) 0.85f else 0.96f),
-        ) {
         Column(
             Modifier
+                .widthIn(max = 640.dp)
+                .fillMaxWidth(if (isUser) 0.85f else 0.96f)
+                .then(
+                    // Same frosted material for both roles - one color.
+                    Modifier.frostPanel(NitronTheme.shapes.large),
+                )
                 .combinedClickable(
                     onClick = {},
                     onLongClick = { actionsOpen = true },
@@ -796,7 +792,6 @@ private fun MessageBubble(
                 }
             }
     }       // Column
-    }       // FrostSurface
     }       // Row
 }
 
