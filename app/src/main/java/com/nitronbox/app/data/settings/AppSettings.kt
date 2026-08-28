@@ -142,9 +142,6 @@ class AppSettings(private val context: Context) {
     /** When true, panels themselves are translucent frosted instead of solid. */
     val blurredPanels: Flow<Boolean> = context.dataStore.data.map { it[KEY_BLUR_PANELS] != false }
 
-    /** Separate blur radius for frosted panels (dp). */
-    val panelBlurStrength: Flow<Float> = context.dataStore.data.map { it[KEY_PANEL_BLUR_STRENGTH] ?: 24f }
-
     suspend fun setBlurEnabled(enabled: Boolean) = context.dataStore.edit { prefs ->
         prefs[KEY_BLUR_ENABLED] = enabled
     }
@@ -155,10 +152,6 @@ class AppSettings(private val context: Context) {
 
     suspend fun setBlurredPanels(enabled: Boolean) = context.dataStore.edit { prefs ->
         prefs[KEY_BLUR_PANELS] = enabled
-    }
-
-    suspend fun setPanelBlurStrength(strength: Float) = context.dataStore.edit { prefs ->
-        prefs[KEY_PANEL_BLUR_STRENGTH] = strength
     }
 
     suspend fun markLegacyDefaultsMigrated() = context.dataStore.edit { prefs ->
@@ -187,6 +180,5 @@ class AppSettings(private val context: Context) {
         val KEY_BLUR_ENABLED = booleanPreferencesKey("blur_enabled")
         val KEY_BLUR_STRENGTH = floatPreferencesKey("blur_strength")
         val KEY_BLUR_PANELS = booleanPreferencesKey("blur_panels")
-        val KEY_PANEL_BLUR_STRENGTH = floatPreferencesKey("panel_blur_strength")
     }
 }

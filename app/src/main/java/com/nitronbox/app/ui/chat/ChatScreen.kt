@@ -104,9 +104,6 @@ import com.nitronbox.app.data.model.MessageRole
 import com.nitronbox.app.data.model.MessageStatus
 import com.nitronbox.app.ui.components.ConversationsPanel
 import com.nitronbox.app.ui.components.NitronCenterDialog
-import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import com.nitronbox.app.ui.components.SpinningLogo
 import com.nitronbox.app.ui.components.TextButtonFlat
 import com.nitronbox.app.ui.components.ModelPickerSheet
@@ -325,7 +322,7 @@ fun ChatScreen(
             // and the drawer beneath them blurs.
             renaming?.let { conversation ->
                 var title by remember(conversation.id) { mutableStateOf(conversation.title) }
-                NitronCenterDialog(visible = true, onDismiss = { renaming = null }, modifier = Modifier.fillMaxSize()) {
+                NitronCenterDialog(visible = true, onDismiss = { renaming = null }) {
                     Column(Modifier.padding(18.dp).fillMaxWidth(0.86f)) {
                         Text(strings.renameConversation, style = MaterialTheme.typography.titleMedium, color = NitronTheme.colors.textPrimary)
                         Spacer(Modifier.height(12.dp))
@@ -352,7 +349,7 @@ fun ChatScreen(
                 }
             }
             deleting?.let { conversation ->
-                NitronCenterDialog(visible = true, onDismiss = { deleting = null }, modifier = Modifier.fillMaxSize()) {
+                NitronCenterDialog(visible = true, onDismiss = { deleting = null }) {
                     Column(Modifier.padding(18.dp).fillMaxWidth(0.86f)) {
                         Text(strings.deleteConversationTitle, style = MaterialTheme.typography.titleMedium, color = NitronTheme.colors.textPrimary)
                         Spacer(Modifier.height(8.dp))
@@ -454,92 +451,6 @@ private fun openAttachment(
                 }
         }
     }
-}
-
-
-/** One rendered tool usage: `action - path`. */
-private data class ToolUsage(val label: String, val start: Int, val end: Int)
-
-/**
- * Collects every tool usage in a message for display — both compact markers produced by the
- * service and legacy raw ```tool fences from older messages — and returns the labels plus the
- * text with all of them removed. Display never shows raw tool JSON.
- */
-private fun extractToolDisplays(text: String): Pair<List<String>, String> {
-    data class Span(val start: Int, val end: Int, val label: String)
-
-    val spans = mutableListOf<Span>()
-    var cursor = 0
-    while (cursor < text.length) {
-        val fenceIdx = listOf(
-            text.indexOf("```tool", cursor),
-            text.indexOf("```nitron:tool", cursor),
-        ).filter { it >= 0 }.minOrNull() ?: -1
-        val markerIdx = text.indexOf("\u27e6tool\u27e7", cursor)
-
-        val useFence = fenceIdx != -1 && (markerIdx == -1 || fenceIdx < markerIdx)
-        if (useFence) {
-            val jsonStart = text.indexOf('{', fenceIdx)
-            if (jsonStart == -1) break
-            var depth = 0
-            var inString = false
-            var escaped = false
-            var jsonEnd = -1
-            var scan = jsonStart
-            while (scan < text.length) {
-                val ch = text[scan]
-                if (escaped) {
-                    escaped = false
-                } else {
-                    when {
-                        ch == '\\' && inString -> escaped = true
-                        ch == '"' -> inString = !inString
-                        !inString && ch == '{' -> depth++
-                        !inString && ch == '}' -> {
-                            depth--
-                            if (depth == 0) {
-                                jsonEnd = scan
-                                break
-                            }
-                        }
-                    }
-                }
-                scan++
-            }
-            if (jsonEnd == -1) break
-            val json = text.substring(jsonStart, jsonEnd + 1)
-            val parsed = runCatching {
-                val obj = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
-                    .parseToJsonElement(json).jsonObject
-                val action = obj["action"]?.jsonPrimitive?.contentOrNull ?: "tool"
-                val path = obj["path"]?.jsonPrimitive?.contentOrNull
-                action + (path?.let { " \u00b7 $it" } ?: "")
-            }.getOrDefault("tool")
-            val fenceEnd = text.indexOf("```", jsonEnd + 1).let { if (it == -1) text.length else it + 3 }
-            spans.add(Span(fenceIdx, fenceEnd, parsed))
-            cursor = fenceEnd
-        } else if (markerIdx != -1) {
-            val lineEnd = text.indexOf('\n', markerIdx).let { if (it == -1) text.length else it }
-            val label = text.substring(markerIdx, lineEnd)
-                .replace("\u27e6tool\u27e7", "").trim()
-            if (label.isNotBlank()) spans.add(Span(markerIdx, lineEnd, label))
-            cursor = lineEnd
-        } else {
-            break
-        }
-    }
-    if (spans.isEmpty()) return emptyList<String>() to text
-    val sb = StringBuilder()
-    var pos = 0
-    val labels = mutableListOf<String>()
-    spans.sortedBy { it.start }.forEach { span ->
-        if (span.start < pos) return@forEach // overlap guard
-        sb.append(text.substring(pos, span.start))
-        labels.add(span.label)
-        pos = span.end
-    }
-    sb.append(text.substring(pos))
-    return labels to sb.toString().replace("\n{3,}", "\n\n").trimStart()
 }
 
 @Composable
@@ -715,9 +626,16 @@ private fun MessageBubble(
                 if (message.content.isEmpty() && message.status == MessageStatus.STREAMING) {
                     StreamingDots(strings.thinking)
                 } else {
-                    val extraction = remember(message.content) { extractToolDisplays(message.content) }
-                    val toolLines = extraction.first
-                    val markdownText = extraction.second
+                    val markerRegex = remember { Regex("\\u27e6tool\\u27e7[^\\n]*") }
+                    val toolLines = remember(message.content) {
+                        markerRegex.findAll(message.content).map { it.value.removePrefix("\u27e6tool\u27e7 ").trim() }.toList()
+                    }
+                    val markdownText = remember(message.content) {
+                        message.content
+                            .replace(markerRegex, "")
+                            .replace("\n{3,}", "\n\n")
+                            .trimStart()
+                    }
                     if (toolLines.isNotEmpty()) {
                         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             toolLines.forEach { line ->

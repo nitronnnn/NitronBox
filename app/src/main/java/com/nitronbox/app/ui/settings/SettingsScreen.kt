@@ -125,7 +125,6 @@ fun SettingsScreen(
     val blurEnabled by viewModel.blurEnabled.collectAsState()
     val blurStrength by viewModel.blurStrength.collectAsState(18f)
     val blurredPanels by viewModel.blurredPanels.collectAsState()
-    val panelBlurStrength by viewModel.panelBlurStrength.collectAsState(24f)
     val galleryImages by viewModel.galleryImages.collectAsState()
 
     val hazeState = androidx.compose.runtime.remember { dev.chrisbanes.haze.HazeState() }
@@ -284,20 +283,6 @@ fun SettingsScreen(
                         )
                         Switch(checked = blurredPanels, onCheckedChange = viewModel::setBlurredPanels)
                     }
-                    androidx.compose.animation.AnimatedVisibility(visible = blurredPanels) {
-                        Column {
-                            Text(
-                                strings.panelStrength + ": " + panelBlurStrength.toInt(),
-                                style = MaterialTheme.typography.labelMedium,
-                                color = NitronTheme.colors.textSecondary,
-                            )
-                            com.nitronbox.app.ui.components.NitronSlider(
-                                value = panelBlurStrength,
-                                onValueChange = viewModel::setPanelBlurStrength,
-                                valueRange = 4f..48f,
-                            )
-                        }
-                    }
                     HorizontalDivider(color = NitronTheme.colors.border)
                     Row(
                         Modifier
@@ -451,7 +436,7 @@ fun SettingsScreen(
     }
 
     deletingProvider?.let { profile ->
-        NitronCenterDialog(visible = true, onDismiss = { deletingProvider = null }, modifier = Modifier.fillMaxSize()) {
+        NitronCenterDialog(visible = true, onDismiss = { deletingProvider = null }, modifier = Modifier.align(Alignment.Center)) {
             Column(Modifier.padding(18.dp).fillMaxWidth(0.86f)) {
                 Text(strings.delete, style = MaterialTheme.typography.titleMedium, color = NitronTheme.colors.textPrimary)
                 Spacer(Modifier.height(8.dp))

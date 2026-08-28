@@ -38,7 +38,6 @@ class MainActivity : ComponentActivity() {
             val blurEnabled by container.appSettings.blurEnabled.collectAsState(true)
             val blurStrength by container.appSettings.blurStrength.collectAsState(18f)
             val blurredPanels by container.appSettings.blurredPanels.collectAsState(true)
-            val panelBlurStrength by container.appSettings.panelBlurStrength.collectAsState(24f)
             val strings = remember(language) { stringsFor(language) }
 
             androidx.compose.runtime.CompositionLocalProvider(LocalStrings provides strings) {
@@ -47,7 +46,6 @@ class MainActivity : ComponentActivity() {
                         blurEnabled = blurEnabled,
                         blurRadius = blurStrength,
                         blurredPanels = blurredPanels,
-                        panelBlurRadius = panelBlurStrength,
                     ),
                 ) {
                 NitronBoxTheme(

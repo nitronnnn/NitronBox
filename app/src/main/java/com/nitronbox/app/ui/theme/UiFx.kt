@@ -13,7 +13,6 @@ data class UiFxConfig(
     val blurEnabled: Boolean = true,
     val blurRadius: Float = 18f,
     val blurredPanels: Boolean = true,
-    val panelBlurRadius: Float = 24f,
 )
 
 val LocalUiFx = compositionLocalOf { UiFxConfig() }
