@@ -25,7 +25,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
@@ -110,7 +112,15 @@ fun ChatScreen(
 
     Scaffold(
         modifier = modifier,
-        snackbarHost = { SnackbarHost(snackbarHostState) },
+        // Inset handling is done explicitly by the header, list, and composer; a zero-inset
+        // scaffold prevents double navigation-bar padding while the composer rides the IME.
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        snackbarHost = {
+            SnackbarHost(
+                snackbarHostState,
+                modifier = Modifier.navigationBarsPadding(),
+            )
+        },
         containerColor = Color.Transparent,
     ) { scaffoldPadding ->
         val drawerState = rememberDrawerState(DrawerValue.Closed)
@@ -195,13 +205,19 @@ fun ChatScreen(
                 onRemoveAttachment = viewModel::removeAttachment,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(start = 14.dp, end = 14.dp, bottom = navigationBottom + 10.dp),
+                    .navigationBarsPadding()
+                    .imePadding()
+                    .padding(start = 14.dp, end = 14.dp, bottom = 10.dp),
             )
 
             if (modelPickerOpen) {
                 ModelPickerSheet(
                     viewModel = viewModel,
                     onDismiss = { modelPickerOpen = false },
+                    onOpenSettings = {
+                        modelPickerOpen = false
+                        onOpenSettings()
+                    },
                 )
             }
             }

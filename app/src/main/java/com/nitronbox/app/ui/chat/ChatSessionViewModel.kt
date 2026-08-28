@@ -269,6 +269,17 @@ class ChatSessionViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
 
+    /** Loads catalogs for every configured provider that has none yet (used by the model picker). */
+    fun refreshAllModels() {
+        viewModelScope.launch {
+            repository.providerProfiles().forEach { profile ->
+                if (_discoveredModels.value[profile.id] == null) {
+                    refreshModels(profile.id)
+                }
+            }
+        }
+    }
+
     fun modelsFor(providerId: String): List<DiscoveredModel> = _discoveredModels.value[providerId].orEmpty()
 
     private fun emit(message: String) {

@@ -1,7 +1,6 @@
 package com.nitronbox.app.ui.components
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -15,8 +14,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ExpandLess
 import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -40,46 +42,70 @@ import com.nitronbox.app.ui.theme.nitronSurface
 import com.nitronbox.app.ui.theme.pressableRipple
 
 /**
- * Model selection: pick a provider, load its live model catalog through discovery, and select
- * the active target used by the chat header and generation requests.
+ * Model selection: providers grouped with their live catalogs from each provider's discovery
+ * endpoint. Catalogs load automatically on open; selection becomes the generation target.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ModelPickerSheet(
     viewModel: ChatSessionViewModel,
     onDismiss: () -> Unit,
+    onOpenSettings: () -> Unit = {},
 ) {
     val providers by viewModel.providers.collectAsState()
     val discovered by viewModel.discoveredModels.collectAsState()
     val activeModel by viewModel.activeModel.collectAsState()
+
+    LaunchedEffect(providers.size) {
+        if (providers.isNotEmpty()) viewModel.refreshAllModels()
+    }
 
     ModalBottomSheet(onDismissRequest = onDismiss, containerColor = NitronTheme.colors.background) {
         Column(Modifier.padding(horizontal = 16.dp)) {
             Text("Select a model", style = MaterialTheme.typography.headlineSmall, color = NitronTheme.colors.textPrimary)
             Spacer(Modifier.height(4.dp))
             Text(
-                "Models come from each provider's discovery endpoint — nothing is hardcoded.",
+                "Pick a provider, then a model. Catalogs come from each provider's discovery endpoint.",
                 style = MaterialTheme.typography.bodySmall,
                 color = NitronTheme.colors.textSecondary,
             )
             Spacer(Modifier.height(12.dp))
             LazyColumn(
                 verticalArrangement = Arrangement.spacedBy(10.dp),
-                modifier = Modifier.padding(bottom = 24.dp),
+                modifier = Modifier.padding(bottom = 12.dp),
             ) {
                 if (providers.isEmpty()) {
                     item {
-                        Text(
-                            "No providers configured yet. Add one in Settings → Providers.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = NitronTheme.colors.textSecondary,
-                        )
+                        Column(
+                            Modifier
+                                .fillMaxWidth()
+                                .nitronSurface(SurfaceLevel.Raised, NitronTheme.shapes.medium)
+                                .padding(18.dp),
+                        ) {
+                            Text(
+                                "No providers configured yet",
+                                style = MaterialTheme.typography.titleSmall,
+                                color = NitronTheme.colors.textPrimary,
+                            )
+                            Spacer(Modifier.height(6.dp))
+                            Text(
+                                "Add at least one provider (OpenAI, Anthropic, Gemini, DeepSeek, Groq or a local Ollama) — then its models will appear here.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = NitronTheme.colors.textSecondary,
+                            )
+                            Spacer(Modifier.height(12.dp))
+                            Button(onClick = onOpenSettings) {
+                                Icon(Icons.Rounded.Settings, null, modifier = Modifier.size(17.dp))
+                                Spacer(Modifier.padding(3.dp))
+                                Text("Add a provider")
+                            }
+                        }
                     }
                 }
                 items(providers, key = { it.id }) { provider ->
                     var expanded by remember(provider.id) { mutableStateOf(false) }
                     val models = discovered[provider.id].orEmpty()
-                    LaunchedEffect(expanded, models) {
+                    LaunchedEffect(expanded) {
                         if (expanded && models.isEmpty()) viewModel.refreshModels(provider.id)
                     }
                     Column(
@@ -101,7 +127,11 @@ fun ModelPickerSheet(
                                     color = NitronTheme.colors.textPrimary,
                                 )
                                 Text(
-                                    if (models.isEmpty()) "Tap to load models" else "${models.size} models",
+                                    when {
+                                        models.isNotEmpty() -> "${models.size} models"
+                                        expanded -> "Loading models…"
+                                        else -> "Tap to load models"
+                                    },
                                     style = MaterialTheme.typography.labelSmall,
                                     color = NitronTheme.colors.textSecondary,
                                     maxLines = 1,
@@ -122,7 +152,8 @@ fun ModelPickerSheet(
                                 modifier = Modifier.padding(end = 10.dp).size(20.dp),
                             )
                         }
-                        if (expanded) {
+                        if (expanded && models.isNotEmpty()) {
+                            HorizontalDivider(color = NitronTheme.colors.border)
                             models.forEach { model ->
                                 val selected = activeModel?.providerId == provider.id && activeModel?.modelId == model.id
                                 Row(
@@ -138,7 +169,7 @@ fun ModelPickerSheet(
                                             )
                                             onDismiss()
                                         }
-                                        .padding(start = 22.dp, end = 14.dp, top = 7.dp, bottom = 7.dp),
+                                        .padding(start = 22.dp, end = 14.dp, top = 8.dp, bottom = 8.dp),
                                 ) {
                                     Text(
                                         model.displayName,

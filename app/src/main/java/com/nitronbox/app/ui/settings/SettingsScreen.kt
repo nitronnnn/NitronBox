@@ -57,6 +57,20 @@ import com.nitronbox.app.ui.theme.SurfaceLevel
 import com.nitronbox.app.ui.theme.nitronSurface
 import com.nitronbox.app.ui.theme.pressableRipple
 
+private val PROVIDER_TEMPLATES = listOf(
+    ProviderTemplate("OpenAI", ProviderProtocol.OPENAI_COMPATIBLE, "https://api.openai.com/"),
+    ProviderTemplate("Anthropic", ProviderProtocol.ANTHROPIC, "https://api.anthropic.com/"),
+    ProviderTemplate("Gemini", ProviderProtocol.GEMINI, "https://generativelanguage.googleapis.com/"),
+    ProviderTemplate("DeepSeek", ProviderProtocol.OPENAI_COMPATIBLE, "https://api.deepseek.com/"),
+    ProviderTemplate("Groq", ProviderProtocol.OPENAI_COMPATIBLE, "https://api.groq.com/openai/"),
+    ProviderTemplate("Ollama (local)", ProviderProtocol.OLLAMA, "http://localhost:11434/"),
+)
+
+private data class ProviderTemplate(
+    val name: String,
+    val protocol: ProviderProtocol,
+    val baseUrl: String,
+)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
@@ -76,7 +90,7 @@ fun SettingsScreen(
     }
 
     var editingProvider by remember { mutableStateOf<ProviderProfile?>(null) }
-    var creatingProvider by remember { mutableStateOf(false) }
+    var prefill by remember { mutableStateOf<ProviderTemplate?>(null) }
 
     Scaffold(
         modifier = modifier,
@@ -112,8 +126,21 @@ fun SettingsScreen(
                         modifier = Modifier.weight(1f),
                     )
                     if (busy) CircularProgressIndicator(modifier = Modifier.height(18.dp), strokeWidth = 2.dp)
-                    IconButton(onClick = { creatingProvider = true }) {
-                        Icon(Icons.Rounded.Add, "Add provider", tint = NitronTheme.colors.textPrimary)
+                }
+            }
+            item {
+                androidx.compose.foundation.lazy.LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(PROVIDER_TEMPLATES.size) { index ->
+                        val template = PROVIDER_TEMPLATES[index]
+                        Text(
+                            "+ ${template.name}",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = NitronTheme.colors.textPrimary,
+                            modifier = Modifier
+                                .nitronSurface(SurfaceLevel.Raised, NitronTheme.shapes.pill)
+                                .pressableRipple(shape = NitronTheme.shapes.pill) { prefill = template }
+                                .padding(horizontal = 14.dp, vertical = 9.dp),
+                        )
                     }
                 }
             }
@@ -153,23 +180,27 @@ fun SettingsScreen(
         }
     }
 
-    if (creatingProvider || editingProvider != null) {
+    if (prefill != null || editingProvider != null) {
+        val template = prefill
         ProviderEditorDialog(
             initial = editingProvider,
+            prefillName = template?.name.orEmpty(),
+            prefillProtocol = template?.protocol ?: ProviderProtocol.OPENAI_COMPATIBLE,
+            prefillBaseUrl = template?.baseUrl ?: "https://",
             onDismiss = {
-                creatingProvider = false
+                prefill = null
                 editingProvider = null
             },
             onSave = { profile, key ->
                 viewModel.saveProvider(profile, key)
-                creatingProvider = false
+                prefill = null
                 editingProvider = null
             },
             onTest = { profileId -> viewModel.testProvider(profileId) },
             onDiscover = { profileId -> viewModel.discoverModels(profileId) },
             onDelete = { profileId ->
                 viewModel.deleteProvider(profileId)
-                creatingProvider = false
+                prefill = null
                 editingProvider = null
             },
         )
@@ -221,15 +252,18 @@ private fun ProviderCard(
 @Composable
 private fun ProviderEditorDialog(
     initial: ProviderProfile?,
+    prefillName: String = "",
+    prefillProtocol: ProviderProtocol = ProviderProtocol.OPENAI_COMPATIBLE,
+    prefillBaseUrl: String = "https://",
     onDismiss: () -> Unit,
     onSave: (ProviderProfile, CharArray?) -> Unit,
     onTest: (String) -> Unit,
     onDiscover: (String) -> Unit,
     onDelete: (String) -> Unit,
 ) {
-    var displayName by remember { mutableStateOf(initial?.displayName.orEmpty()) }
-    var baseUrl by remember { mutableStateOf(initial?.baseUrl ?: "https://") }
-    var protocol by remember { mutableStateOf(initial?.protocol ?: ProviderProtocol.OPENAI_COMPATIBLE) }
+    var displayName by remember { mutableStateOf(initial?.displayName ?: prefillName) }
+    var baseUrl by remember { mutableStateOf(initial?.baseUrl ?: prefillBaseUrl) }
+    var protocol by remember { mutableStateOf(initial?.protocol ?: prefillProtocol) }
     var apiKey by remember { mutableStateOf("") }
     var protocolMenuOpen by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
