@@ -34,11 +34,18 @@ class CreatorFileTools(private val context: Context) {
         return current
     }
 
-    private fun mimeFor(name: String): String = when (name.substringAfterLast('.', "").lowercase()) {
-        "txt", "md", "log", "kt", "kts", "java", "py", "js", "ts", "json", "xml", "yaml", "yml",
-        "html", "css", "csv", "sh", "gradle", "toml", "ini", "sql", "c", "cpp", "h", "hpp", "cs",
-        "go", "rs", "rb", "php", "swift", "dart" -> "text/plain"
-        else -> "application/octet-stream"
+    private fun mimeFor(name: String): String {
+        val ext = name.substringAfterLast('.', "").lowercase()
+        // Real MIME for the extension keeps providers from appending a wrong suffix (.html.txt).
+        android.webkit.MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext)?.let { return it }
+        return when (ext) {
+            "md" -> "text/markdown"
+            "kt", "kts" -> "text/x-kotlin"
+            "py" -> "text/x-python"
+            "gradle", "java", "rs", "go", "rb", "php", "swift", "dart", "sh", "bat", "sql",
+            "c", "h", "cpp", "hpp", "cs", "log", "ini", "toml", "yaml", "yml", "csv" -> "text/plain"
+            else -> "application/octet-stream"
+        }
     }
 
     /** Recursive listing up to [maxDepth], one entry per line: `dir/ name` or `file name (size)`. */
@@ -82,8 +89,21 @@ class CreatorFileTools(private val context: Context) {
             } ?: return@withContext "ERROR: cannot create parent folder for $relativePath"
             val name = segments.last()
             val existing = parent.findFile(name)
-            val target = existing ?: parent.createFile(mimeFor(name), name)
-                ?: return@withContext "ERROR: cannot create $relativePath"
+            val target = existing ?: run {
+                val created = parent.createFile(mimeFor(name), name)
+                    ?: return@withContext "ERROR: cannot create $relativePath"
+                // Some providers normalize the display name (index.html -> index.html.txt);
+                // rename back so the model's exact filename always wins.
+                if (created.name != name) {
+                    runCatching {
+                        DocumentsContract.renameDocument(context.contentResolver, created.uri, name)
+                    }.getOrNull()?.let { renamed ->
+                        DocumentFile.fromTreeUri(context, renamed) ?: created
+                    } ?: created
+                } else {
+                    created
+                }
+            }
             runCatching {
                 context.contentResolver.openOutputStream(target.uri, "wt")?.use { output ->
                     output.write(content.encodeToByteArray())

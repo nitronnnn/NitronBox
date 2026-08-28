@@ -62,6 +62,7 @@ class AppContainer(application: Application) {
     val providerRegistryFactory = ProviderRegistryFactory(credentialStore, httpClient, json)
     val modelCatalogStore = com.nitronbox.app.data.remote.ModelCatalogStore(chatRepository, providerRegistryFactory)
     val contentResolver = application.contentResolver
+    val filesDir: java.io.File = application.filesDir
     val creatorFileTools = com.nitronbox.app.data.filesystem.CreatorFileTools(application)
 
     val contextWindowEngine: ContextWindowEngine by lazy {

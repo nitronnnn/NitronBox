@@ -153,6 +153,69 @@ class ChatSessionViewModel(private val container: AppContainer) : ViewModel() {
         ?.takeIf { it.isNotBlank() }
         ?: "project"
 
+    // --- Skills ---
+
+    val skills: StateFlow<List<com.nitronbox.app.data.settings.Skill>> = settings.skills
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    fun saveSkill(skill: com.nitronbox.app.data.settings.Skill) {
+        viewModelScope.launch {
+            val updated = settings.loadSkills().filterNot { it.name == skill.name } + skill
+            settings.setSkills(updated)
+        }
+    }
+
+    fun toggleSkill(skill: com.nitronbox.app.data.settings.Skill) {
+        saveSkill(skill.copy(enabled = !skill.enabled))
+    }
+
+    // --- Appearance effects ---
+
+    fun setBlurEnabled(enabled: Boolean) {
+        viewModelScope.launch { settings.setBlurEnabled(enabled) }
+    }
+
+    fun setBlurStrength(strength: Float) {
+        viewModelScope.launch { settings.setBlurStrength(strength) }
+    }
+
+    fun setBlurredPanels(enabled: Boolean) {
+        viewModelScope.launch { settings.setBlurredPanels(enabled) }
+    }
+
+    // --- Device gallery (MediaStore) for the wallpaper picker ---
+
+    private val _galleryImages = MutableStateFlow<List<String>>(emptyList())
+    val galleryImages: StateFlow<List<String>> = _galleryImages.asStateFlow()
+
+    fun loadGallery() {
+        viewModelScope.launch {
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                val list = mutableListOf<String>()
+                runCatching {
+                    container.contentResolver.query(
+                        android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                        arrayOf(android.provider.MediaStore.Images.Media._ID),
+                        null,
+                        null,
+                        android.provider.MediaStore.Images.Media.DATE_ADDED + " DESC",
+                    )?.use { cursor ->
+                        while (cursor.moveToNext() && list.size < 300) {
+                            val id = cursor.getLong(0)
+                            list.add(
+                                android.content.ContentUris.withAppendedId(
+                                    android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                                    id,
+                                ).toString(),
+                            )
+                        }
+                    }
+                }
+                _galleryImages.value = list
+            }
+        }
+    }
+
     // --- Attachment viewer ---
 
     data class AttachmentView(
@@ -183,6 +246,7 @@ class ChatSessionViewModel(private val container: AppContainer) : ViewModel() {
 
     init {
         viewModelScope.launch { bootstrap() }
+        loadGallery()
     }
 
     private suspend fun bootstrap() {
@@ -269,6 +333,7 @@ class ChatSessionViewModel(private val container: AppContainer) : ViewModel() {
                     target = ModelTarget(model.providerId, model.modelId, model.displayName),
                     creatorTools = creatorTools,
                     creatorRootUri = if (creatorTools != null) folderUri else null,
+                    skills = settings.loadSkills(),
                 )
             } catch (failure: Exception) {
                 _draft.value = _draft.value.ifBlank { text }
@@ -283,6 +348,7 @@ class ChatSessionViewModel(private val container: AppContainer) : ViewModel() {
         target: ModelTarget,
         creatorTools: com.nitronbox.app.data.filesystem.CreatorFileTools? = null,
         creatorRootUri: String? = null,
+        skills: List<com.nitronbox.app.data.settings.Skill> = emptyList(),
     ) {
         val registry = registryFlow.value ?: container.loadRegistry()
         _isStreaming.value = true
@@ -295,6 +361,7 @@ class ChatSessionViewModel(private val container: AppContainer) : ViewModel() {
                     target,
                     creatorTools = creatorTools,
                     creatorRootUri = creatorRootUri,
+                    skills = skills,
                 )
             ) {
                 is ChatService.TurnOutcome.Failed -> emit(outcome.errorText)
@@ -323,6 +390,7 @@ class ChatSessionViewModel(private val container: AppContainer) : ViewModel() {
                 conversationId = conversationId,
                 workspace = workspace,
                 target = ModelTarget(model.providerId, model.modelId, model.displayName),
+                skills = settings.loadSkills(),
             )
         }
     }

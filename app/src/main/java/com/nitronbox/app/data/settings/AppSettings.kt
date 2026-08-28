@@ -1,14 +1,20 @@
 package com.nitronbox.app.data.settings
 
 import android.content.Context
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
 
 private val Context.dataStore by preferencesDataStore(name = "nitronbox_settings")
+
+private val settingsJson = Json { ignoreUnknownKeys = true }
 
 /** Currently selected model target shown in the chat header and used for generation. */
 data class ActiveModel(
@@ -22,6 +28,14 @@ enum class ThemeModeSetting { SYSTEM, LIGHT, DARK }
 enum class LanguageSetting { SYSTEM, ENGLISH, RUSSIAN }
 
 enum class WallpaperPreset { NONE, MIDNIGHT, AURORA, SUNSET, GRAPHITE, LOGO, CUSTOM }
+
+/** A reusable instruction snippet the user can toggle into every chat's system prompt. */
+@Serializable
+data class Skill(
+    val name: String,
+    val prompt: String,
+    val enabled: Boolean = true,
+)
 
 /**
  * Process-wide UI state that should survive restarts but does not belong in Room:
@@ -104,6 +118,42 @@ class AppSettings(private val context: Context) {
         if (uri == null) prefs.remove(KEY_CREATOR_FOLDER) else prefs[KEY_CREATOR_FOLDER] = uri
     }
 
+    // --- Skills ---
+
+    val skills: Flow<List<Skill>> = context.dataStore.data.map { prefs ->
+        prefs[KEY_SKILLS]?.let { stored ->
+            runCatching { settingsJson.decodeFromString<List<Skill>>(stored) }.getOrNull()
+        } ?: emptyList()
+    }
+
+    suspend fun setSkills(list: List<Skill>) = context.dataStore.edit { prefs ->
+        prefs[KEY_SKILLS] = settingsJson.encodeToString(list)
+    }
+
+    suspend fun loadSkills(): List<Skill> = skills.first()
+
+    // --- Background effects ---
+
+    val blurEnabled: Flow<Boolean> = context.dataStore.data.map { it[KEY_BLUR_ENABLED] != false }
+
+    /** Maximum blur radius in dp for panel overlays. */
+    val blurStrength: Flow<Float> = context.dataStore.data.map { it[KEY_BLUR_STRENGTH] ?: 18f }
+
+    /** When true, panels themselves are translucent frosted instead of solid. */
+    val blurredPanels: Flow<Boolean> = context.dataStore.data.map { it[KEY_BLUR_PANELS] != false }
+
+    suspend fun setBlurEnabled(enabled: Boolean) = context.dataStore.edit { prefs ->
+        prefs[KEY_BLUR_ENABLED] = enabled
+    }
+
+    suspend fun setBlurStrength(strength: Float) = context.dataStore.edit { prefs ->
+        prefs[KEY_BLUR_STRENGTH] = strength
+    }
+
+    suspend fun setBlurredPanels(enabled: Boolean) = context.dataStore.edit { prefs ->
+        prefs[KEY_BLUR_PANELS] = enabled
+    }
+
     suspend fun markLegacyDefaultsMigrated() = context.dataStore.edit { prefs ->
         prefs[KEY_DEFAULTS_MIGRATED] = "true"
     }
@@ -126,5 +176,9 @@ class AppSettings(private val context: Context) {
         val KEY_WALLPAPER_URI = stringPreferencesKey("wallpaper_image_uri")
         val KEY_DEFAULTS_MIGRATED = stringPreferencesKey("legacy_defaults_migrated")
         val KEY_CREATOR_FOLDER = stringPreferencesKey("creator_folder_uri")
+        val KEY_SKILLS = stringPreferencesKey("skills_json")
+        val KEY_BLUR_ENABLED = booleanPreferencesKey("blur_enabled")
+        val KEY_BLUR_STRENGTH = floatPreferencesKey("blur_strength")
+        val KEY_BLUR_PANELS = booleanPreferencesKey("blur_panels")
     }
 }

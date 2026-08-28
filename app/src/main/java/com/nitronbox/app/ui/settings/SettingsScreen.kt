@@ -40,7 +40,6 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Slider
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -71,6 +70,8 @@ import com.nitronbox.app.ui.i18n.LocalStrings
 import com.nitronbox.app.ui.theme.NitronTheme
 import com.nitronbox.app.ui.theme.SurfaceLevel
 import com.nitronbox.app.ui.theme.nitronSurface
+import androidx.compose.material3.Switch
+import com.nitronbox.app.ui.components.AnimatedSegmented
 import com.nitronbox.app.ui.components.NitronBottomPanel
 import com.nitronbox.app.ui.components.NitronCenterDialog
 import com.nitronbox.app.ui.components.TextButtonFlat
@@ -109,10 +110,6 @@ fun SettingsScreen(
     val wallpaper by viewModel.wallpaper.collectAsState()
     val wallpaperImageUri by viewModel.wallpaperImageUri.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
-    val pickWallpaper = androidx.activity.compose.rememberLauncherForActivityResult(
-        androidx.activity.result.contract.ActivityResultContracts.OpenDocument(),
-    ) { uri -> uri?.let(viewModel::setWallpaperImage) }
-
     LaunchedEffect(Unit) {
         viewModel.events.collect { snackbarHostState.showSnackbar(it) }
     }
@@ -121,10 +118,16 @@ fun SettingsScreen(
     var prefill by remember { mutableStateOf<ProviderTemplate?>(null) }
     var wallpaperOpen by remember { mutableStateOf(false) }
     var deletingProvider by remember { mutableStateOf<ProviderProfile?>(null) }
+    var skillDraft by remember { mutableStateOf<com.nitronbox.app.data.settings.Skill?>(null) }
+    val skills by viewModel.skills.collectAsState()
+    val blurEnabled by viewModel.blurEnabled.collectAsState()
+    val blurStrength by viewModel.blurStrength.collectAsState(18f)
+    val blurredPanels by viewModel.blurredPanels.collectAsState()
+    val galleryImages by viewModel.galleryImages.collectAsState()
 
     // Every overlay on this screen blurs the settings content beneath it.
     val overlayOpen = editingProvider != null || prefill != null ||
-        wallpaperOpen || deletingProvider != null
+        wallpaperOpen || deletingProvider != null || skillDraft != null
     val blurProgress by androidx.compose.animation.core.animateFloatAsState(
         targetValue = if (overlayOpen) 1f else 0f,
         label = "settingsBlur",
@@ -252,6 +255,39 @@ fun SettingsScreen(
                         onSelect = viewModel::setLanguage,
                     )
                     HorizontalDivider(color = NitronTheme.colors.border)
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                        Text(
+                            strings.blurBackground,
+                            style = MaterialTheme.typography.labelLarge,
+                            color = NitronTheme.colors.textPrimary,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Switch(checked = blurEnabled, onCheckedChange = viewModel::setBlurEnabled)
+                    }
+                    androidx.compose.animation.AnimatedVisibility(visible = blurEnabled) {
+                        Column {
+                            Text(
+                                strings.strength + ": " + blurStrength.toInt(),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = NitronTheme.colors.textSecondary,
+                            )
+                            com.nitronbox.app.ui.components.NitronSlider(
+                                value = blurStrength,
+                                onValueChange = viewModel::setBlurStrength,
+                                valueRange = 4f..32f,
+                            )
+                        }
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                        Text(
+                            strings.blurredPanels,
+                            style = MaterialTheme.typography.labelLarge,
+                            color = NitronTheme.colors.textPrimary,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Switch(checked = blurredPanels, onCheckedChange = viewModel::setBlurredPanels)
+                    }
+                    HorizontalDivider(color = NitronTheme.colors.border)
                     Row(
                         Modifier
                             .fillMaxWidth()
@@ -278,6 +314,54 @@ fun SettingsScreen(
                             modifier = Modifier.padding(start = 6.dp),
                         )
                     }
+                }
+            }
+            item { HorizontalDivider(color = NitronTheme.colors.border) }
+            item {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        strings.skills,
+                        style = MaterialTheme.typography.titleLarge,
+                        color = NitronTheme.colors.textPrimary,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Text(
+                        "+ " + strings.addSkill,
+                        style = MaterialTheme.typography.labelLarge,
+                        color = NitronTheme.colors.accent,
+                        modifier = Modifier
+                            .pressableRipple(shape = NitronTheme.shapes.small) {
+                                skillDraft = com.nitronbox.app.data.settings.Skill("", "")
+                            }
+                            .padding(horizontal = 6.dp, vertical = 6.dp),
+                    )
+                }
+            }
+            items(skills.size) { index ->
+                val skill = skills[index]
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .nitronSurface(SurfaceLevel.Raised, NitronTheme.shapes.medium)
+                        .pressableRipple(shape = NitronTheme.shapes.medium) { skillDraft = skill }
+                        .padding(12.dp),
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            skill.name.ifBlank { "\u2014" },
+                            style = MaterialTheme.typography.titleSmall,
+                            color = if (skill.enabled) NitronTheme.colors.textPrimary else NitronTheme.colors.textTertiary,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Switch(checked = skill.enabled, onCheckedChange = { viewModel.toggleSkill(skill) })
+                    }
+                    Text(
+                        skill.prompt,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = NitronTheme.colors.textTertiary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
                 }
             }
             item { HorizontalDivider(color = NitronTheme.colors.border) }
@@ -331,9 +415,27 @@ fun SettingsScreen(
             selected = wallpaper,
             imageUri = wallpaperImageUri,
             onSelect = viewModel::setWallpaper,
-            onPickImage = { pickWallpaper.launch(arrayOf("image/*")) },
+            galleryImages = galleryImages,
+            onPickFromGallery = { uri -> viewModel.setWallpaperImage(android.net.Uri.parse(uri)) },
             onDismiss = { wallpaperOpen = false },
         )
+    }
+
+    skillDraft?.let { draft ->
+        NitronBottomPanel(
+            visible = true,
+            onDismiss = { skillDraft = null },
+            modifier = Modifier.align(Alignment.BottomCenter),
+        ) {
+            SkillEditor(
+                initial = draft,
+                onDismiss = { skillDraft = null },
+                onSave = { saved ->
+                    viewModel.saveSkill(saved)
+                    skillDraft = null
+                },
+            )
+        }
     }
 
     deletingProvider?.let { profile ->
@@ -367,17 +469,63 @@ private fun wallpaperPreviewColors(preset: com.nitronbox.app.data.settings.Wallp
     com.nitronbox.app.data.settings.WallpaperPreset.NONE -> listOf(Color(0xFF16181D), Color(0xFF2A2D34))
 }
 
-/** Custom wallpaper panel: preset thumbs plus a SAF photo, all in one in-window overlay. */
+/** Skill editor: name plus the instruction block merged into the system prompt. */
+@Composable
+private fun SkillEditor(
+    initial: com.nitronbox.app.data.settings.Skill,
+    onDismiss: () -> Unit,
+    onSave: (com.nitronbox.app.data.settings.Skill) -> Unit,
+) {
+    val strings = LocalStrings.current
+    var name by remember { mutableStateOf(initial.name) }
+    var prompt by remember { mutableStateOf(initial.prompt) }
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp)
+            .padding(bottom = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Text(
+            if (initial.name.isBlank()) strings.addSkill else initial.name,
+            style = MaterialTheme.typography.headlineSmall,
+            color = NitronTheme.colors.textPrimary,
+        )
+        OutlinedTextField(
+            value = name,
+            onValueChange = { name = it },
+            label = { Text(strings.skillName) },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        OutlinedTextField(
+            value = prompt,
+            onValueChange = { prompt = it },
+            label = { Text(strings.skillPrompt) },
+            minLines = 4,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Button(
+            onClick = { onSave(initial.copy(name = name.trim(), prompt = prompt.trim())) },
+            enabled = name.isNotBlank() && prompt.isNotBlank(),
+            modifier = Modifier.fillMaxWidth(),
+        ) { Text(strings.save) }
+    }
+}
+
+/** Custom wallpaper panel: preset thumbs, plus an in-app gallery of device photos. */
 @Composable
 private fun WallpaperPanel(
     modifier: Modifier = Modifier,
     selected: com.nitronbox.app.data.settings.WallpaperPreset,
     imageUri: String?,
+    galleryImages: List<String>,
     onSelect: (com.nitronbox.app.data.settings.WallpaperPreset) -> Unit,
-    onPickImage: () -> Unit,
+    onPickFromGallery: (String) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val strings = LocalStrings.current
+    var showGallery by remember { mutableStateOf(false) }
     val presets = listOf(
         com.nitronbox.app.data.settings.WallpaperPreset.NONE,
         com.nitronbox.app.data.settings.WallpaperPreset.LOGO,
@@ -390,6 +538,32 @@ private fun WallpaperPanel(
         Column(Modifier.padding(horizontal = 16.dp).padding(bottom = 20.dp)) {
             Text(strings.wallpaper, style = MaterialTheme.typography.headlineSmall, color = NitronTheme.colors.textPrimary)
             Spacer(Modifier.height(12.dp))
+            if (showGallery) {
+                androidx.compose.foundation.lazy.grid.LazyVerticalGrid(
+                    columns = androidx.compose.foundation.lazy.grid.GridCells.Fixed(3),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(340.dp),
+                ) {
+                    items(galleryImages.size) { index ->
+                        val galleryUri = galleryImages[index]
+                        coil.compose.AsyncImage(
+                            model = galleryUri,
+                            contentDescription = null,
+                            contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                            modifier = Modifier
+                                .size(110.dp)
+                                .clip(NitronTheme.shapes.small)
+                                .pressableRipple(shape = NitronTheme.shapes.small) {
+                                    onPickFromGallery(galleryUri)
+                                    onDismiss()
+                                },
+                        )
+                    }
+                }
+            } else {
             androidx.compose.foundation.lazy.LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 items(presets.size) { index ->
                     val preset = presets[index]
@@ -415,7 +589,7 @@ private fun WallpaperPanel(
                                         Modifier.border(1.dp, NitronTheme.colors.border, NitronTheme.shapes.small)
                                     },
                                 )
-                                .pressableRipple(shape = NitronTheme.shapes.small, onClick = onPickImage),
+                                .pressableRipple(shape = NitronTheme.shapes.small, onClick = { showGallery = true }),
                             contentAlignment = Alignment.Center,
                         ) {
                             if (isSelected && imageUri != null) {
@@ -436,6 +610,7 @@ private fun WallpaperPanel(
                         )
                     }
                 }
+            }
             }
             Spacer(Modifier.height(16.dp))
             Button(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) { Text(strings.close) }
@@ -472,7 +647,7 @@ private fun WallpaperThumb(
     }
 }
 
-/** OpenAI/Vercel-style segmented control: pill row with an animated selection accent. */
+/** OpenAI/Vercel-style segmented control with a sliding selection pill. */
 @Composable
 private fun <T> SegmentedSelector(
     options: List<Pair<String, T>>,
@@ -480,38 +655,12 @@ private fun <T> SegmentedSelector(
     onSelect: (T) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Row(
-        modifier
-            .fillMaxWidth()
-            .nitronSurface(SurfaceLevel.Muted, NitronTheme.shapes.small)
-            .padding(3.dp),
-        horizontalArrangement = Arrangement.spacedBy(3.dp),
-    ) {
-        options.forEach { (label, value) ->
-            val isSelected = value == selected
-            Text(
-                label,
-                style = MaterialTheme.typography.labelMedium,
-                color = if (isSelected) NitronTheme.colors.onPrimary else NitronTheme.colors.textSecondary,
-                maxLines = 1,
-                textAlign = TextAlign.Center,
-                modifier = Modifier
-                    .weight(1f)
-                    .then(
-                        if (isSelected) {
-                            Modifier.background(
-                                color = NitronTheme.colors.primary,
-                                shape = NitronTheme.shapes.small,
-                            )
-                        } else {
-                            Modifier
-                        },
-                    )
-                    .pressableRipple(shape = NitronTheme.shapes.small) { onSelect(value) }
-                    .padding(vertical = 8.dp),
-            )
-        }
-    }
+    com.nitronbox.app.ui.components.AnimatedSegmented(
+        options = options,
+        selected = selected,
+        onSelect = onSelect,
+        modifier = modifier,
+    )
 }
 
 @Composable

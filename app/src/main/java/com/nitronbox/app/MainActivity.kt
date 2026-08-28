@@ -35,9 +35,19 @@ class MainActivity : ComponentActivity() {
         setContent {
             val themeMode by container.appSettings.themeMode.collectAsState(ThemeModeSetting.SYSTEM)
             val language by container.appSettings.language.collectAsState(com.nitronbox.app.data.settings.LanguageSetting.SYSTEM)
+            val blurEnabled by container.appSettings.blurEnabled.collectAsState(true)
+            val blurStrength by container.appSettings.blurStrength.collectAsState(18f)
+            val blurredPanels by container.appSettings.blurredPanels.collectAsState(true)
             val strings = remember(language) { stringsFor(language) }
 
             androidx.compose.runtime.CompositionLocalProvider(LocalStrings provides strings) {
+                androidx.compose.runtime.CompositionLocalProvider(
+                    com.nitronbox.app.ui.theme.LocalUiFx provides com.nitronbox.app.ui.theme.UiFxConfig(
+                        blurEnabled = blurEnabled,
+                        blurRadius = blurStrength,
+                        blurredPanels = blurredPanels,
+                    ),
+                ) {
                 NitronBoxTheme(
                     workspaceTheme = WorkspaceTheme(mode = themeMode.toDomain()),
                 ) {
@@ -68,11 +78,11 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                 }
+                }
             }
         }
     }
 }
-
 private fun ThemeModeSetting.toDomain(): ThemeMode = when (this) {
     ThemeModeSetting.SYSTEM -> ThemeMode.SYSTEM
     ThemeModeSetting.LIGHT -> ThemeMode.LIGHT

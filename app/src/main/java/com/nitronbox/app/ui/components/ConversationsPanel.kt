@@ -58,6 +58,8 @@ import java.util.Date
 fun ConversationsPanel(
     viewModel: ChatSessionViewModel,
     modifier: Modifier = Modifier,
+    onRename: (ConversationEntity) -> Unit = {},
+    onDelete: (ConversationEntity) -> Unit = {},
 ) {
     val strings = LocalStrings.current
     val creatorMode by viewModel.creatorMode.collectAsState()
@@ -72,9 +74,6 @@ fun ConversationsPanel(
         uri?.let(viewModel::pickCreatorFolder)
     }
 
-    var renaming by remember { mutableStateOf<ConversationEntity?>(null) }
-    var deleting by remember { mutableStateOf<ConversationEntity?>(null) }
-
     Column(
         modifier
             .fillMaxSize()
@@ -88,35 +87,11 @@ fun ConversationsPanel(
         }
         Spacer(Modifier.height(12.dp))
 
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .nitronSurface(SurfaceLevel.Muted, NitronTheme.shapes.pill)
-                .padding(3.dp),
-            horizontalArrangement = Arrangement.spacedBy(3.dp),
-        ) {
-            listOf(strings.chatsTab to false, strings.creator to true).forEach { (label, value) ->
-                val selected = creatorMode == value
-                Text(
-                    label,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = if (selected) NitronTheme.colors.onPrimary else NitronTheme.colors.textSecondary,
-                    maxLines = 1,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier
-                        .weight(1f)
-                        .then(
-                            if (selected) {
-                                Modifier.background(NitronTheme.colors.primary, NitronTheme.shapes.pill)
-                            } else {
-                                Modifier
-                            },
-                        )
-                        .pressableRipple(shape = NitronTheme.shapes.pill) { viewModel.setCreatorMode(value) }
-                        .padding(vertical = 7.dp),
-                )
-            }
-        }
+        AnimatedSegmented(
+            options = listOf(strings.chatsTab to false, strings.creator to true),
+            selected = creatorMode,
+            onSelect = viewModel::setCreatorMode,
+        )
         Spacer(Modifier.height(10.dp))
 
         if (creatorMode) {
@@ -236,7 +211,7 @@ fun ConversationsPanel(
                                 leadingIcon = { Icon(Icons.Rounded.Edit, null) },
                                 onClick = {
                                     actionsOpen = false
-                                    renaming = conversation
+                                    onRename(conversation)
                                 },
                             )
                             DropdownMenuItem(
@@ -244,7 +219,7 @@ fun ConversationsPanel(
                                 leadingIcon = { Icon(Icons.Rounded.Delete, null, tint = NitronTheme.colors.destructive) },
                                 onClick = {
                                     actionsOpen = false
-                                    deleting = conversation
+                                    onDelete(conversation)
                                 },
                             )
                         }
@@ -252,59 +227,6 @@ fun ConversationsPanel(
                 }
             }
         }
-    }
-
-    Box(Modifier.fillMaxSize()) {
-    renaming?.let { conversation ->
-        var title by remember(conversation.id) { mutableStateOf(conversation.title) }
-        NitronCenterDialog(visible = true, onDismiss = { renaming = null }) {
-            Column(Modifier.padding(18.dp).fillMaxWidth(0.86f)) {
-                Text(strings.renameConversation, style = MaterialTheme.typography.titleMedium, color = NitronTheme.colors.textPrimary)
-                Spacer(Modifier.height(12.dp))
-                TextField(
-                    value = title,
-                    onValueChange = { title = it },
-                    singleLine = true,
-                    colors = TextFieldDefaults.colors(
-                        focusedContainerColor = NitronTheme.colors.surfaceMuted,
-                        unfocusedContainerColor = NitronTheme.colors.surfaceMuted,
-                        focusedIndicatorColor = Color.Transparent,
-                        unfocusedIndicatorColor = Color.Transparent,
-                    ),
-                )
-                Spacer(Modifier.height(14.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.align(Alignment.End)) {
-                    TextButtonFlat(strings.cancel) { renaming = null }
-                    TextButtonFlat(strings.save, enabled = title.isNotBlank(), accent = true) {
-                        viewModel.renameConversation(conversation.id, title)
-                        renaming = null
-                    }
-                }
-            }
-        }
-    }
-
-    deleting?.let { conversation ->
-        NitronCenterDialog(visible = true, onDismiss = { deleting = null }) {
-            Column(Modifier.padding(18.dp).fillMaxWidth(0.86f)) {
-                Text(strings.deleteConversationTitle, style = MaterialTheme.typography.titleMedium, color = NitronTheme.colors.textPrimary)
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    strings.deleteConversationBody(conversation.title),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = NitronTheme.colors.textSecondary,
-                )
-                Spacer(Modifier.height(14.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.align(Alignment.End)) {
-                    TextButtonFlat(strings.cancel) { deleting = null }
-                    TextButtonFlat(strings.delete, destructive = true) {
-                        viewModel.deleteConversation(conversation.id)
-                        deleting = null
-                    }
-                }
-            }
-        }
-    }
     }
 }
 

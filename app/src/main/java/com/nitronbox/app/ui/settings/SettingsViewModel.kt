@@ -59,6 +59,77 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
         viewModelScope.launch { container.appSettings.setThemeMode(mode) }
     }
 
+    val skills: StateFlow<List<com.nitronbox.app.data.settings.Skill>> =
+        container.appSettings.skills
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    fun saveSkill(skill: com.nitronbox.app.data.settings.Skill) {
+        viewModelScope.launch {
+            val updated = container.appSettings.loadSkills().filterNot { it.name == skill.name } + skill
+            container.appSettings.setSkills(updated)
+        }
+    }
+
+    fun toggleSkill(skill: com.nitronbox.app.data.settings.Skill) {
+        saveSkill(skill.copy(enabled = !skill.enabled))
+    }
+
+    val blurEnabled: StateFlow<Boolean> = container.appSettings.blurEnabled
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
+
+    val blurStrength: StateFlow<Float> = container.appSettings.blurStrength
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 18f)
+
+    val blurredPanels: StateFlow<Boolean> = container.appSettings.blurredPanels
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
+
+    fun setBlurEnabled(enabled: Boolean) {
+        viewModelScope.launch { container.appSettings.setBlurEnabled(enabled) }
+    }
+
+    fun setBlurStrength(strength: Float) {
+        viewModelScope.launch { container.appSettings.setBlurStrength(strength) }
+    }
+
+    fun setBlurredPanels(enabled: Boolean) {
+        viewModelScope.launch { container.appSettings.setBlurredPanels(enabled) }
+    }
+
+    private val _galleryImages = MutableStateFlow<List<String>>(emptyList())
+    val galleryImages: StateFlow<List<String>> = _galleryImages.asStateFlow()
+
+    init {
+        loadGallery()
+    }
+
+    fun loadGallery() {
+        viewModelScope.launch {
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                val list = mutableListOf<String>()
+                runCatching {
+                    container.contentResolver.query(
+                        android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                        arrayOf(android.provider.MediaStore.Images.Media._ID),
+                        null,
+                        null,
+                        android.provider.MediaStore.Images.Media.DATE_ADDED + " DESC",
+                    )?.use { cursor ->
+                        while (cursor.moveToNext() && list.size < 300) {
+                            val id = cursor.getLong(0)
+                            list.add(
+                                android.content.ContentUris.withAppendedId(
+                                    android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                                    id,
+                                ).toString(),
+                            )
+                        }
+                    }
+                }
+                _galleryImages.value = list
+            }
+        }
+    }
+
     fun setLanguage(language: com.nitronbox.app.data.settings.LanguageSetting) {
         viewModelScope.launch { container.appSettings.setLanguage(language) }
     }
@@ -76,14 +147,16 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
 
     fun setWallpaperImage(uri: android.net.Uri) {
         viewModelScope.launch {
-            runCatching {
-                container.contentResolver.takePersistableUriPermission(
-                    uri,
-                    android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION,
-                )
-                container.appSettings.setWallpaperImageUri(uri.toString())
-                container.appSettings.setWallpaper(com.nitronbox.app.data.settings.WallpaperPreset.CUSTOM)
-            }.onFailure { emit("Unable to use this image") }
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                runCatching {
+                    val file = java.io.File(container.filesDir, "wallpaper_custom.jpg")
+                    container.contentResolver.openInputStream(uri)?.use { input ->
+                        file.outputStream().use { output -> input.copyTo(output) }
+                    } ?: throw IllegalStateException("Unable to read the image")
+                    container.appSettings.setWallpaperImageUri(file.absolutePath)
+                    container.appSettings.setWallpaper(com.nitronbox.app.data.settings.WallpaperPreset.CUSTOM)
+                }.onFailure { emit("Unable to use this image") }
+            }
         }
     }
 

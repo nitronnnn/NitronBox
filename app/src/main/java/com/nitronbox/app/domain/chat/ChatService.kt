@@ -88,12 +88,10 @@ class ChatService(
     }
 
     /**
-     * Streams one assistant reply for [conversationId] and persists it, throttling intermediate
-     * writes. Cancellation keeps the partial text; provider failures are stored on the message.
-     *
-     * When [creatorTools] is provided the model may act on the project folder by emitting
-     * fenced `tool {...}` blocks; each block is executed, its result appended to the context as
-     * a system note, and a follow-up request is made — up to [MAX_TOOL_ITERATIONS] rounds.
+     * Streams one assistant reply for [conversationId] and persists it. The whole turn —
+     * including Creator tool rounds — lives in a single assistant message: tool blocks stay
+     * attached to the final answer and tool results are fed back to the model invisibly
+     * (they exist only in the in-memory transcript, never as separate chat bubbles).
      */
     suspend fun generateReply(
         conversationId: String,
@@ -103,80 +101,42 @@ class ChatService(
         route: ModelRoute = workspace.route.copy(primary = target),
         creatorTools: CreatorFileTools? = null,
         creatorRootUri: String? = null,
+        skills: List<com.nitronbox.app.data.settings.Skill> = emptyList(),
     ): TurnOutcome {
         val root = creatorRootUri?.let { creatorTools?.rootFor(it) }
-        var iteration = 0
-        var outcome: TurnOutcome = TurnOutcome.Completed
-        while (true) {
-            val history = repository.contextMessages(conversationId)
-                .filter { it.status != MessageStatus.FAILED && it.status != MessageStatus.QUEUED }
-            val conversation = repository.conversation(conversationId)
-            val existingSummary = conversation?.let {
-                ConversationSummary(
-                    conversationId = it.id,
-                    content = it.summary ?: return@let null,
-                    throughMessageEpochMillis = it.summaryThroughEpochMillis ?: 0L,
-                    estimatedTokens = 0,
-                )
+        val systemPrompt = buildString {
+            append(workspace.systemPrompt)
+            skills.filter { it.enabled }.ifEmpty { null }?.let { enabled ->
+                append("\n\n").append(enabled.joinToString("\n\n") { "# Skill: ${it.name}\n${it.prompt}" })
             }
-            val assembly = contextWindowEngine.assemble(
-                conversationId = conversationId,
-                systemPrompt = creatorTools?.let {
-                    workspace.systemPrompt + "\n\n" + creatorSystemPrompt(it, root)
-                } ?: workspace.systemPrompt,
-                history = history,
-                policy = workspace.contextPolicy,
-                existingSummary = existingSummary,
-            )
-            assembly.generatedSummary?.let {
-                repository.persistSummary(conversationId, it.content, it.throughMessageEpochMillis)
+            if (root != null && creatorTools != null) {
+                append("\n\n").append(creatorSystemPrompt(creatorTools, root))
             }
-
-            outcome = streamOnce(
-                conversationId = conversationId,
-                assembly = assembly,
-                workspace = workspace,
-                registry = registry,
-                target = target,
-                route = route,
-                images = resolveInlineImages(history.lastOrNull { it.role == MessageRole.USER }),
-            )
-
-            val blocks = if (outcome is TurnOutcome.Completed && root != null) {
-                TOOL_BLOCK.findAll(assistantContent ?: "").toList()
-            } else emptyList()
-            if (blocks.isEmpty() || root == null || iteration >= MAX_TOOL_ITERATIONS) break
-
-            // Persist tool execution results and let the model continue.
-            val results = blocks.mapIndexedNotNull { index, match ->
-                val result = creatorTools?.executeTool(root, match.groupValues[1])
-                if (result == null) null else "[$index] $result"
-            }
-            if (results.isEmpty()) break
-            repository.saveMessage(
-                ChatMessage(
-                    conversationId = conversationId,
-                    role = MessageRole.USER,
-                    content = "[tool results]\n" + results.joinToString("\n\n"),
-                ),
-            )
-            repository.touchConversation(conversationId)
-            iteration++
         }
-        return outcome
-    }
 
-    private var assistantContent: String? = null
+        val history = repository.contextMessages(conversationId)
+            .filter { it.status != MessageStatus.FAILED && it.status != MessageStatus.QUEUED }
+        val conversation = repository.conversation(conversationId)
+        val existingSummary = conversation?.let {
+            ConversationSummary(
+                conversationId = it.id,
+                content = it.summary ?: return@let null,
+                throughMessageEpochMillis = it.summaryThroughEpochMillis ?: 0L,
+                estimatedTokens = 0,
+            )
+        }
+        val assembly = contextWindowEngine.assemble(
+            conversationId = conversationId,
+            systemPrompt = systemPrompt,
+            history = history,
+            policy = workspace.contextPolicy,
+            existingSummary = existingSummary,
+        )
+        assembly.generatedSummary?.let {
+            repository.persistSummary(conversationId, it.content, it.throughMessageEpochMillis)
+        }
 
-    private suspend fun streamOnce(
-        conversationId: String,
-        assembly: ContextAssembly,
-        workspace: Workspace,
-        registry: ProviderRegistry,
-        target: ModelTarget,
-        route: ModelRoute,
-        images: Map<String, List<InlineImage>>,
-    ): TurnOutcome {
+        // One assistant row for the entire turn.
         val assistant = ChatMessage(
             conversationId = conversationId,
             role = MessageRole.ASSISTANT,
@@ -186,27 +146,24 @@ class ChatService(
         repository.saveMessage(assistant)
         repository.touchConversation(conversationId)
 
-        val request = ChatCompletionRequest(
-            modelId = target.modelId,
-            messages = assembly.messages,
-            generation = workspace.generation,
-            requestId = UUID.randomUUID().toString(),
-            imagesByMessageId = images,
-        )
+        val transcript = assembly.messages.toMutableList()
+        val images = resolveInlineImages(history.lastOrNull { it.role == MessageRole.USER })
 
         val content = StringBuilder()
+        val reasoning = StringBuilder()
         var inputTokens: Int? = null
         var outputTokens: Int? = null
         var providerId: String? = null
         var modelId: String? = null
+        val startedAt = System.currentTimeMillis()
         var generationMillis: Long? = null
         var lastPersistAt = 0L
-        val startedAt = System.currentTimeMillis()
 
         suspend fun persist(status: MessageStatus, errorText: String? = null) {
             repository.updateMessage(
                 assistant.copy(
                     content = content.toString(),
+                    reasoning = reasoning.toString().takeIf(String::isNotBlank),
                     status = status,
                     providerId = providerId,
                     modelId = modelId,
@@ -218,52 +175,102 @@ class ChatService(
             )
         }
 
-        return try {
-            FailoverRouter(registry).stream(route, request).collect { event ->
-                when (event) {
-                    is com.nitronbox.app.data.remote.StreamEvent.Started -> {
-                        if (providerId == null) {
-                            providerId = event.providerId
-                            modelId = event.modelId
+        try {
+            var iteration = 0
+            while (true) {
+                val roundContent = StringBuilder()
+                val request = ChatCompletionRequest(
+                    modelId = target.modelId,
+                    messages = transcript.toList(),
+                    generation = workspace.generation,
+                    requestId = UUID.randomUUID().toString(),
+                    imagesByMessageId = images,
+                )
+                FailoverRouter(registry).stream(route, request).collect { event ->
+                    when (event) {
+                        is com.nitronbox.app.data.remote.StreamEvent.Started -> {
+                            if (providerId == null) {
+                                providerId = event.providerId
+                                modelId = event.modelId
+                            }
                         }
-                    }
-                    is com.nitronbox.app.data.remote.StreamEvent.TextDelta -> {
-                        content.append(event.text)
-                        val now = System.currentTimeMillis()
-                        if (now - lastPersistAt > PERSIST_INTERVAL_MILLIS) {
-                            lastPersistAt = now
-                            persist(MessageStatus.STREAMING)
+                        is com.nitronbox.app.data.remote.StreamEvent.TextDelta -> {
+                            roundContent.append(event.text)
+                            val now = System.currentTimeMillis()
+                            if (now - lastPersistAt > PERSIST_INTERVAL_MILLIS) {
+                                lastPersistAt = now
+                                persist(MessageStatus.STREAMING)
+                            }
                         }
+                        is com.nitronbox.app.data.remote.StreamEvent.ReasoningDelta -> {
+                            reasoning.append(event.text)
+                            val now = System.currentTimeMillis()
+                            if (now - lastPersistAt > PERSIST_INTERVAL_MILLIS) {
+                                lastPersistAt = now
+                                persist(MessageStatus.STREAMING)
+                            }
+                        }
+                        is com.nitronbox.app.data.remote.StreamEvent.ToolCallDelta -> Unit
+                        is com.nitronbox.app.data.remote.StreamEvent.Usage -> {
+                            inputTokens = event.inputTokens ?: inputTokens
+                            outputTokens = event.outputTokens ?: outputTokens
+                        }
+                        is com.nitronbox.app.data.remote.StreamEvent.Completed -> Unit
                     }
-                    is com.nitronbox.app.data.remote.StreamEvent.ReasoningDelta -> Unit
-                    is com.nitronbox.app.data.remote.StreamEvent.ToolCallDelta -> Unit
-                    is com.nitronbox.app.data.remote.StreamEvent.Usage -> {
-                        inputTokens = event.inputTokens ?: inputTokens
-                        outputTokens = event.outputTokens ?: outputTokens
-                    }
-                    is com.nitronbox.app.data.remote.StreamEvent.Completed -> Unit
                 }
-            }
-            if (content.isBlank()) {
-                persist(MessageStatus.FAILED, "The model returned an empty response.")
-                TurnOutcome.Failed("The model returned an empty response.")
-            } else {
-                generationMillis = System.currentTimeMillis() - startedAt
-                assistantContent = content.toString()
-                persist(MessageStatus.COMPLETE)
-                TurnOutcome.Completed
+
+                if (roundContent.isBlank()) {
+                    persist(MessageStatus.FAILED, "The model returned an empty response.")
+                    return TurnOutcome.Failed("The model returned an empty response.")
+                }
+                content.append(roundContent)
+
+                val blocks = if (root != null) {
+                    TOOL_BLOCK.findAll(roundContent.toString()).toList()
+                } else emptyList()
+                if (blocks.isEmpty() || iteration >= MAX_TOOL_ITERATIONS) {
+                    generationMillis = System.currentTimeMillis() - startedAt
+                    persist(MessageStatus.COMPLETE)
+                    return TurnOutcome.Completed
+                }
+
+                // Execute tools; results are visible to the model through the transcript only.
+                val results = blocks.mapIndexedNotNull { index, match ->
+                    root?.let { r -> creatorTools?.executeTool(r, match.groupValues[1])?.let { res -> "[$index] $res" } }
+                }
+                transcript.add(
+                    ChatMessage(
+                        conversationId = conversationId,
+                        role = MessageRole.ASSISTANT,
+                        content = roundContent.toString(),
+                    ),
+                )
+                if (results.isEmpty()) {
+                    generationMillis = System.currentTimeMillis() - startedAt
+                    persist(MessageStatus.COMPLETE)
+                    return TurnOutcome.Completed
+                }
+                transcript.add(
+                    ChatMessage(
+                        conversationId = conversationId,
+                        role = MessageRole.USER,
+                        content = "[tool results]\n" + results.joinToString("\n\n"),
+                    ),
+                )
+                repository.touchConversation(conversationId)
+                iteration++
             }
         } catch (cancelled: CancellationException) {
             withContext(NonCancellable + Dispatchers.IO) {
                 persist(MessageStatus.CANCELLED)
             }
-            TurnOutcome.Cancelled
+            return TurnOutcome.Cancelled
         } catch (failure: Throwable) {
             val detail = failure.message?.take(MAX_ERROR_CHARS) ?: failure::class.java.simpleName
             withContext(NonCancellable + Dispatchers.IO) {
                 persist(MessageStatus.FAILED, detail)
             }
-            TurnOutcome.Failed(detail)
+            return TurnOutcome.Failed(detail)
         }
     }
 

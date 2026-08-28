@@ -21,6 +21,7 @@ data class ChatMessage(
     val outputTokens: Int? = null,
     val errorText: String? = null,
     val generationDurationMillis: Long? = null,
+    val reasoning: String? = null,
 )
 
 @Serializable

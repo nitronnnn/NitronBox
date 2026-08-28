@@ -15,7 +15,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         AttachmentEntity::class,
         ProviderProfileEntity::class,
     ],
-    version = 4,
+    version = 5,
     exportSchema = true,
 )
 abstract class NitronBoxDatabase : RoomDatabase() {
@@ -57,6 +57,13 @@ abstract class NitronBoxDatabase : RoomDatabase() {
             }
         }
 
+        /** v5 stores the model's reasoning stream for the collapsible thinking section. */
+        private val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE messages ADD COLUMN reasoning TEXT")
+            }
+        }
+
         fun create(context: Context): NitronBoxDatabase = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(
                 context.applicationContext,
@@ -64,7 +71,7 @@ abstract class NitronBoxDatabase : RoomDatabase() {
                 "nitronbox.db",
             )
                 .setJournalMode(JournalMode.WRITE_AHEAD_LOGGING)
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
                 .build()
                 .also { instance = it }
         }

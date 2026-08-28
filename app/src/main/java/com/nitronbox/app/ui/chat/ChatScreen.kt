@@ -22,6 +22,7 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -89,8 +90,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
@@ -101,10 +102,13 @@ import com.nitronbox.app.data.model.ChatMessage
 import com.nitronbox.app.data.model.MessageRole
 import com.nitronbox.app.data.model.MessageStatus
 import com.nitronbox.app.ui.components.ConversationsPanel
+import com.nitronbox.app.ui.components.NitronCenterDialog
 import com.nitronbox.app.ui.components.SpinningLogo
+import com.nitronbox.app.ui.components.TextButtonFlat
 import com.nitronbox.app.ui.components.ModelPickerSheet
 import com.nitronbox.app.ui.chat.components.MarkdownRenderer
 import com.nitronbox.app.ui.i18n.LocalStrings
+import com.nitronbox.app.ui.theme.LocalUiFx
 import com.nitronbox.app.ui.theme.NitronTheme
 import com.nitronbox.app.ui.theme.SurfaceLevel
 import com.nitronbox.app.ui.theme.WallpaperBackdrop
@@ -143,6 +147,9 @@ fun ChatScreen(
     ) { scaffoldPadding ->
         var conversationsOpen by remember { mutableStateOf(false) }
         var modelPickerOpen by remember { mutableStateOf(false) }
+        var renaming by remember { mutableStateOf<com.nitronbox.app.data.local.ConversationEntity?>(null) }
+        var deleting by remember { mutableStateOf<com.nitronbox.app.data.local.ConversationEntity?>(null) }
+        val fx = LocalUiFx.current
         val wallpaper by viewModel.wallpaper.collectAsState()
         val wallpaperImageUri by viewModel.wallpaperImageUri.collectAsState()
 
@@ -151,6 +158,7 @@ fun ChatScreen(
             targetValue = if (modelPickerOpen || conversationsOpen) 1f else 0f,
             label = "blurProgress",
         )
+        val blurRadius = if (fx.blurEnabled) fx.blurRadius.dp else 0.dp
 
         Box(
             Modifier
@@ -159,8 +167,21 @@ fun ChatScreen(
                 .background(NitronTheme.colors.background),
         ) {
             // Everything beneath the overlays blurs together: wallpaper, chat, composer.
-            Box(Modifier.fillMaxSize().blur(18.dp * blurProgress)) {
-                WallpaperBackdrop(wallpaper, wallpaperImageUri, Modifier.matchParentSize())
+            val listState = rememberLazyListState()
+            // Parallax: the wallpaper trails the scroll for depth.
+            val parallax by remember {
+                androidx.compose.runtime.derivedStateOf {
+                    (listState.firstVisibleItemIndex * 800 + listState.firstVisibleItemScrollOffset).toFloat()
+                }
+            }
+            Box(Modifier.fillMaxSize().blur(blurRadius * blurProgress)) {
+                WallpaperBackdrop(
+                    wallpaper,
+                    wallpaperImageUri,
+                    Modifier
+                        .matchParentSize()
+                        .graphicsLayer { translationY = parallax * 0.12f },
+                )
                 Column(Modifier.fillMaxSize()) {
                     val statusTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
 
@@ -176,7 +197,6 @@ fun ChatScreen(
                             .padding(top = statusTop + 6.dp, start = 14.dp, end = 14.dp),
                     )
 
-                    val listState = rememberLazyListState()
                     LaunchedEffect(messages.itemCount) {
                         if (messages.itemCount > 0) listState.scrollToItem(0)
                     }
@@ -272,7 +292,11 @@ fun ChatScreen(
                             .padding(start = 8.dp, top = 8.dp, bottom = 8.dp)
                             .nitronSurface(SurfaceLevel.Overlay, RoundedCornerShape(26.dp)),
                     ) {
-                        ConversationsPanel(viewModel = viewModel)
+                        ConversationsPanel(
+                            viewModel = viewModel,
+                            onRename = { renaming = it },
+                            onDelete = { deleting = it },
+                        )
                     }
                 }
             }
@@ -286,6 +310,58 @@ fun ChatScreen(
                         onOpenSettings()
                     },
                 )
+            }
+
+            // Rename/delete dialogs live at screen level so they center over everything
+            // and the drawer beneath them blurs.
+            renaming?.let { conversation ->
+                var title by remember(conversation.id) { mutableStateOf(conversation.title) }
+                NitronCenterDialog(visible = true, onDismiss = { renaming = null }) {
+                    Column(Modifier.padding(18.dp).fillMaxWidth(0.86f)) {
+                        Text(strings.renameConversation, style = MaterialTheme.typography.titleMedium, color = NitronTheme.colors.textPrimary)
+                        Spacer(Modifier.height(12.dp))
+                        TextField(
+                            value = title,
+                            onValueChange = { title = it },
+                            singleLine = true,
+                            colors = TextFieldDefaults.colors(
+                                focusedContainerColor = NitronTheme.colors.surfaceMuted,
+                                unfocusedContainerColor = NitronTheme.colors.surfaceMuted,
+                                focusedIndicatorColor = Color.Transparent,
+                                unfocusedIndicatorColor = Color.Transparent,
+                            ),
+                        )
+                        Spacer(Modifier.height(14.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.align(Alignment.End)) {
+                            TextButtonFlat(strings.cancel) { renaming = null }
+                            TextButtonFlat(strings.save, enabled = title.isNotBlank(), accent = true) {
+                                viewModel.renameConversation(conversation.id, title)
+                                renaming = null
+                            }
+                        }
+                    }
+                }
+            }
+            deleting?.let { conversation ->
+                NitronCenterDialog(visible = true, onDismiss = { deleting = null }) {
+                    Column(Modifier.padding(18.dp).fillMaxWidth(0.86f)) {
+                        Text(strings.deleteConversationTitle, style = MaterialTheme.typography.titleMedium, color = NitronTheme.colors.textPrimary)
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            strings.deleteConversationBody(conversation.title),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = NitronTheme.colors.textSecondary,
+                        )
+                        Spacer(Modifier.height(14.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.align(Alignment.End)) {
+                            TextButtonFlat(strings.cancel) { deleting = null }
+                            TextButtonFlat(strings.delete, destructive = true) {
+                                viewModel.deleteConversation(conversation.id)
+                                deleting = null
+                            }
+                        }
+                    }
+                }
             }
 
             // Full-screen attachment viewer: images fit-to-screen, text files scrollable.
@@ -384,7 +460,10 @@ private fun ChatHeader(
     val strings = LocalStrings.current
     Row(
         modifier
-            .nitronSurface(SurfaceLevel.Overlay, NitronTheme.shapes.large)
+            .clip(NitronTheme.shapes.large)
+            // Frosted header: chat content scrolls beneath a translucent veil.
+            .background(NitronTheme.colors.background.copy(alpha = 0.72f))
+            .border(1.dp, NitronTheme.colors.border, NitronTheme.shapes.large)
             .padding(horizontal = 6.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -515,6 +594,30 @@ private fun MessageBubble(
             if (isUser) {
                 Text(message.content, style = MaterialTheme.typography.bodyLarge, color = NitronTheme.colors.textPrimary)
             } else {
+                if (!message.reasoning.isNullOrBlank()) {
+                    var reasoningOpen by remember(message.id) { mutableStateOf(false) }
+                    Row(
+                        Modifier
+                            .pressableRipple(shape = NitronTheme.shapes.small) { reasoningOpen = !reasoningOpen }
+                            .padding(vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            (if (reasoningOpen) "▾ " else "▸ ") + strings.thinking,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = NitronTheme.colors.textTertiary,
+                        )
+                    }
+                    AnimatedVisibility(visible = reasoningOpen) {
+                        Text(
+                            message.reasoning!!,
+                            style = MaterialTheme.typography.bodySmall.copy(fontStyle = androidx.compose.ui.text.font.FontStyle.Italic),
+                            color = NitronTheme.colors.textSecondary,
+                            modifier = Modifier.padding(top = 6.dp, start = 2.dp),
+                        )
+                    }
+                    Spacer(Modifier.height(8.dp))
+                }
                 if (message.content.isEmpty() && message.status == MessageStatus.STREAMING) {
                     StreamingDots(strings.thinking)
                 } else {

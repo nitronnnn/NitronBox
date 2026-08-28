@@ -71,6 +71,8 @@ data class MessageEntity(
     val outputTokens: Int? = null,
     val errorText: String? = null,
     val generationDurationMillis: Long? = null,
+    /** The model's reasoning stream ("thinking"), shown in a collapsible section. */
+    val reasoning: String? = null,
 )
 
 @Entity(

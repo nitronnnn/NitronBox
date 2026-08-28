@@ -1,5 +1,7 @@
 package com.nitronbox.app.ui.theme
 
+import android.net.Uri
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
@@ -77,10 +79,15 @@ fun WallpaperBackdrop(
 
         WallpaperPreset.CUSTOM -> {
             if (customImageUri != null) {
-                val context = LocalContext.current
+                // Wallpapers chosen from the gallery are copied into app storage (plain path).
+                val model: Any = if (customImageUri.startsWith("/")) {
+                    java.io.File(customImageUri)
+                } else {
+                    Uri.parse(customImageUri)
+                }
                 Box(modifier.background(NitronTheme.colors.background)) {
                     AsyncImage(
-                        model = customImageUri,
+                        model = model,
                         contentDescription = null,
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize(),

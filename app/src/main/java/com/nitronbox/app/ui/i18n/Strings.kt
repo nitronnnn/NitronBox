@@ -88,6 +88,13 @@ data class Strings(
     val chooseFolder: String,
     val noFolderHint: String,
     val open: String,
+    val skills: String,
+    val addSkill: String,
+    val skillName: String,
+    val skillPrompt: String,
+    val blurBackground: String,
+    val blurredPanels: String,
+    val strength: String,
 )
 
 val EnglishStrings = Strings(
@@ -170,6 +177,13 @@ val EnglishStrings = Strings(
     chooseFolder = "Choose folder",
     noFolderHint = "Select a project folder first — the model will be able to read, edit, create and delete files in it.",
     open = "Open",
+    skills = "Skills",
+    addSkill = "Add skill",
+    skillName = "Name",
+    skillPrompt = "Prompt",
+    blurBackground = "Background blur",
+    blurredPanels = "Frosted panels",
+    strength = "Strength",
 )
 
 val RussianStrings = Strings(
@@ -252,6 +266,13 @@ val RussianStrings = Strings(
     chooseFolder = "Выбрать папку",
     noFolderHint = "Сначала выберите папку проекта — модель сможет читать, редактировать, создавать и удалять файлы в ней.",
     open = "Открыть",
+    skills = "Скиллы",
+    addSkill = "Добавить скилл",
+    skillName = "Название",
+    skillPrompt = "Промпт",
+    blurBackground = "Блюр фона",
+    blurredPanels = "Блюренные панели",
+    strength = "Сила",
 )
 
 val LocalStrings = compositionLocalOf { EnglishStrings }

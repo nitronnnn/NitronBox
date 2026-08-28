@@ -169,6 +169,7 @@ private fun MessageWithAttachments.toDomain() = ChatMessage(
     outputTokens = message.outputTokens,
     errorText = message.errorText,
     generationDurationMillis = message.generationDurationMillis,
+    reasoning = message.reasoning,
 )
 
 private fun AttachmentEntity.toDomain() = AttachmentReference(
@@ -194,6 +195,7 @@ private fun ChatMessage.toEntity() = MessageEntity(
     outputTokens = outputTokens,
     errorText = errorText,
     generationDurationMillis = generationDurationMillis,
+    reasoning = reasoning,
 )
 
 private fun AttachmentReference.toEntity(messageId: String) = AttachmentEntity(
