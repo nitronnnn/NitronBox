@@ -52,22 +52,26 @@ fun WallpaperBackdrop(
         )
 
         WallpaperPreset.LOGO -> Box(modifier.background(NitronTheme.colors.background)) {
-            val glow = if (dark) Color(0xFF1E3A5F) else Color(0xFFCFE4FF)
+            val glow = if (dark) Color(0xFF22222E) else Color(0xFFE9E9EF)
             Box(
                 Modifier
                     .fillMaxSize()
                     .background(
                         Brush.radialGradient(
-                            colors = listOf(glow.copy(alpha = if (dark) 0.55f else 0.5f), Color.Transparent),
+                            colors = listOf(glow.copy(alpha = if (dark) 0.6f else 0.55f), Color.Transparent),
                         ),
                     ),
             )
+            val top = if (dark) Color.White else Color(0xFF3C3C42)
+            val bottom = if (dark) Color(0xFF8E8E96) else Color(0xFFA2A2AA)
             NitronLogo(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(56.dp),
-                topColor = Color(0xFF8AB6FF).copy(alpha = if (dark) 0.15f else 0.2f),
-                bottomColor = Color(0xFF3FC8F5).copy(alpha = if (dark) 0.15f else 0.2f),
+                leftTop = top.copy(alpha = if (dark) 0.9f else 0.85f),
+                leftBottom = bottom.copy(alpha = if (dark) 0.7f else 0.65f),
+                rightTop = top.copy(alpha = if (dark) 0.9f else 0.85f),
+                rightBottom = bottom.copy(alpha = if (dark) 0.7f else 0.65f),
             )
         }
 

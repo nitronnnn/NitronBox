@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>NitronBox Logo Editor</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin:0; padding:24px; background:#0b0d12; color:#e6e6e6;
+         font:14px/1.5 "Segoe UI", system-ui, sans-serif; }
+  h1 { font-size:18px; margin:0 0 6px; }
+  p.hint { color:#9a9a9a; margin:0 0 18px; }
+  .row { display:flex; gap:24px; flex-wrap:wrap; align-items:flex-start; }
+  .panel { background:#12151c; border:1px solid #262a33; border-radius:12px; padding:14px; }
+  canvas { touch-action:none; cursor:crosshair; border-radius:10px; display:block; }
+  .controls { width:260px; display:flex; flex-direction:column; gap:10px; }
+  label { display:flex; justify-content:space-between; gap:8px; align-items:center; color:#aab; }
+  input[type=color] { width:42px; height:26px; border:none; background:none; }
+  input[type=checkbox] { accent-color:#3fc8f5; }
+  button { background:#1d2330; color:#e6e6e6; border:1px solid #333a48; padding:8px 10px;
+           border-radius:8px; cursor:pointer; font-size:13px; }
+  button:hover { background:#262d3d; }
+  button.primary { background:#2f7fd6; border-color:#2f7fd6; }
+  textarea { width:100%; min-height:170px; background:#0d1016; color:#cde3f5; border:1px solid #262a33;
+             border-radius:8px; padding:10px; font:12px/1.45 Consolas, monospace; white-space:pre; }
+  .pts { font:12px Consolas, monospace; color:#8fa3b8; }
+  .cols { display:flex; gap:14px; flex-wrap:wrap; }
+  .previews { display:flex; gap:14px; align-items:flex-end; }
+</style>
+</head>
+<body>
+<h1>NitronBox — редактор логотипа (два треугольника)</h1>
+<p class="hint">Тащите вершины мышкой. Точки 1–3 — левый треугольник, 4–6 — правый.
+Когда устроит — жмите «Скопировать Compose» и пришлите/вставьте результат в файл
+<code>app/src/main/java/com/nitronbox/app/ui/components/NitronLogo.kt</code>
+(или просто отдайте мне — вставлю сам). «Vector XML» — для иконки приложения.</p>
+
+<div class="row">
+  <div class="panel">
+    <canvas id="ed" width="540" height="360"></canvas>
+    <div class="pts" id="ptsOut" style="margin-top:8px"></div>
+  </div>
+
+  <div class="controls panel">
+    <label>Фон <input type="color" id="bg" value="#0c1020"></label>
+    <label>Левый градиент от <input type="color" id="l1" value="#6eaaf5"></label>
+    <label>Левый градиент до <input type="color" id="l2" value="#4076cd"></label>
+    <label>Правый градиент от <input type="color" id="r1" value="#5fc8f0"></label>
+    <label>Правый градиент до <input type="color" id="r2" value="#2894c6"></label>
+    <label>Привязка к сетке (2px) <input type="checkbox" id="snap" checked></label>
+    <label>Показывать сетку <input type="checkbox" id="grid" checked></label>
+    <button class="primary" id="copyCompose">Скопировать Compose-код</button>
+    <button id="copyVector">Скопировать Vector XML (иконка)</button>
+    <button id="downloadPng">Скачать PNG 512×512</button>
+    <button id="reset">Сбросить</button>
+  </div>
+
+  <div class="panel">
+    <div class="previews">
+      <div>
+        <canvas id="pvIcon" width="150" height="150"></canvas>
+        <div class="pts" style="text-align:center">иконка</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="panel" style="margin-top:16px; max-width:820px">
+  <div class="cols">
+    <div style="flex:1">
+      <div class="pts">Compose (NitronLogo.kt)</div>
+      <textarea id="outCompose" readonly></textarea>
+    </div>
+    <div style="flex:1">
+      <div class="pts">Vector XML (ic_launcher_foreground.xml)</div>
+      <textarea id="outVector" readonly></textarea>
+    </div>
+  </div>
+</div>
+
+<script>
+const W = 108, H = 72;               // логические координаты
+const SCALE = 5;                      // 540x360
+const DEFAULT = [
+  [46,26], [56,30], [30,58],          // левый: верх, правый угол, низ-лево
+  [66,32], [74,44], [56,62],          // правый
+];
+let pts = localStorage.getItem("nb_logo") ? JSON.parse(localStorage.getItem("nb_logo")) : DEFAULT.slice();
+
+const ed = document.getElementById("ed"), ctx = ed.getContext("2d");
+const pv = document.getElementById("pvIcon"), pctx = pv.getContext("2d");
+const $ = id => document.getElementById(id);
+const snapOn = () => $("snap").checked;
+const col = id => $(id).value;
+
+function snap(p){ return snapOn() ? [Math.round(p[0]/2)*2, Math.round(p[1]/2)*2] : p; }
+
+function hex2rgb(h){ return [parseInt(h.slice(1,3),16), parseInt(h.slice(3,5),16), parseInt(h.slice(5,7),16)]; }
+
+function drawPolygon(c, pts, c1, c2, scale){
+  const xs = pts.map(p=>p[0]), ys = pts.map(p=>p[1]);
+  const y0 = Math.min(...ys)*scale, y1 = Math.max(...ys)*scale;
+  const g = c.createLinearGradient(0, y0, 0, y1);
+  g.addColorStop(0, c1); g.addColorStop(1, c2);
+  c.beginPath();
+  pts.forEach((p,i)=> i ? c.lineTo(p[0]*scale, p[1]*scale) : c.moveTo(p[0]*scale, p[1]*scale));
+  c.closePath();
+  c.fillStyle = g; c.fill();
+}
+
+function render(){
+  ctx.fillStyle = col("bg"); ctx.fillRect(0,0,ed.width,ed.height);
+  if ($("grid").checked){
+    ctx.strokeStyle = "rgba(255,255,255,.05)"; ctx.lineWidth = 1;
+    for(let x=0;x<=W;x+=6){ ctx.beginPath(); ctx.moveTo(x*SCALE,0); ctx.lineTo(x*SCALE,ed.height); ctx.stroke(); }
+    for(let y=0;y<=H;y+=6){ ctx.beginPath(); ctx.moveTo(0,y*SCALE); ctx.lineTo(ed.width,y*SCALE); ctx.stroke(); }
+  }
+  drawPolygon(ctx, pts.slice(0,3), col("l1"), col("l2"), SCALE);
+  drawPolygon(ctx, pts.slice(3,6), col("r1"), col("r2"), SCALE);
+  ctx.font = "12px Consolas";
+  pts.forEach((p,i)=>{
+    ctx.fillStyle = i<3 ? "#ffd479" : "#79e0ff";
+    ctx.beginPath(); ctx.arc(p[0]*SCALE, p[1]*SCALE, 5, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = "#fff"; ctx.fillText(i+1, p[0]*SCALE+8, p[1]*SCALE-6);
+  });
+  $("ptsOut").textContent = "Точки: " + pts.map(p=>`(${p[0]},${p[1]})`).join("  ");
+
+  // иконка 150x150: логотип вписан в квадрат с фоном
+  pctx.fillStyle = "#0c1020"; pctx.fillRect(0,0,150,150);
+  const s = Math.min(110/W, 70/H)* (150/100) * (100/100); // вписываем
+  const k = 120/W;                       // логотип ~120px шириной
+  const ox = (150 - W*k)/2, oy = (150 - H*k)/2;
+  drawPolygon(pctx, pts.slice(0,3).map(p=>[p[0]*k+ox, p[1]*k+oy]), col("l1"), col("l2"), 1);
+  drawPolygon(pctx, pts.slice(3,6).map(p=>[p[0]*k+ox, p[1]*k+oy]), col("r1"), col("r2"), 1);
+
+  $("outCompose").value = composeCode();
+  $("outVector").value = vectorCode();
+  localStorage.setItem("nb_logo", JSON.stringify(pts));
+}
+
+function fmt(n){ return (Math.round(n*100)/100).toString(); }
+
+function composeCode(){
+  const norm = pts.map(p=>[p[0]/W, p[1]/H]);
+  const l = norm.slice(0,3), r = norm.slice(3,6);
+  const f = p => `w * ${fmt(p[0])}f, h * ${fmt(p[1])}f`;
+  const list = p => p.map(q=>`            ${f(q)}`).join(",\n");
+  const l1 = col("l1").replace("#","0xFF"), l2 = col("l2").replace("#","0xFF");
+  const r1 = col("r1").replace("#","0xFF"), r2 = col("r2").replace("#","0xFF");
+return `// Вставить в NitronLogo.kt вместо body Canvas
+Canvas(modifier) {
+    val w = size.width
+    val h = size.height
+    val leftBlade = Path().apply {
+        moveTo(${f(l[0])})
+        lineTo(${f(l[1])})
+        lineTo(${f(l[2])})
+        close()
+    }
+    val rightBlade = Path().apply {
+        moveTo(${f(r[0])})
+        lineTo(${f(r[1])})
+        lineTo(${f(r[2])})
+        close()
+    }
+    drawPath(leftBlade, brush = Brush.verticalGradient(listOf(Color(${l1}), Color(${l2}))))
+    drawPath(rightBlade, brush = Brush.verticalGradient(listOf(Color(${r1}), Color(${r2}))))
+}`;
+}
+
+function vectorCode(){
+  // вписываем W x H в 108x108 с полями
+  const k = 82 / Math.max(W, H);
+  const ox = (108 - W*k)/2, oy = (108 - H*k)/2;
+  const path = idx => pts.slice(idx, idx+3).map(p => `${fmt(p[0]*k+ox)},${fmt(p[1]*k+oy)}`);
+  const seg = p => `M${path(p)[0]} L${path(p)[1]} L${path(p)[2]} Z`;
+  const l1 = col("l1"), l2 = col("l2"), r1 = col("r1"), r2 = col("r2");
+return `<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <path android:fillColor="${l1}" android:pathData="${seg(0)}" />
+    <path android:fillColor="${r1}" android:pathData="${seg(3)}" />
+</vector>
+<!-- градиенты: left ${l1} -> ${l2}, right ${r1} -> ${r2} (сверху вниз) -->`;
+}
+
+let drag = -1;
+function pos(e){
+  const r = ed.getBoundingClientRect();
+  let x = (e.clientX - r.left) / SCALE, y = (e.clientY - r.top) / SCALE;
+  let p = snap([x,y]);
+  return [Math.max(0, Math.min(W, p[0])), Math.max(0, Math.min(H, p[1]))];
+}
+ed.addEventListener("pointerdown", e => {
+  const m = pos(e);
+  let best = -1, bd = 1e9;
+  pts.forEach((p,i)=>{ const d = (p[0]-m[0])**2 + (p[1]-m[1])**2; if (d < bd){ bd = d; best = i; } });
+  if (bd < 9) { drag = best; ed.setPointerCapture(e.pointerId); }
+});
+ed.addEventListener("pointermove", e => {
+  if (drag < 0) return;
+  pts[drag] = pos(e); render();
+});
+ed.addEventListener("pointerup", () => drag = -1);
+
+["bg","l1","l2","r1","r2","snap","grid"].forEach(id => $(id).addEventListener("input", render));
+$("reset").onclick = () => { pts = DEFAULT.slice(); render(); };
+$("copyCompose").onclick = () => { navigator.clipboard.writeText($("outCompose").value); $("copyCompose").textContent = "Скопировано ✓"; setTimeout(()=>$("copyCompose").textContent="Скопировать Compose-код",1200); };
+$("copyVector").onclick = () => { navigator.clipboard.writeText($("outVector").value); $("copyVector").textContent = "Скопировано ✓"; setTimeout(()=>$("copyVector").textContent="Скопировать Vector XML (иконка)",1200); };
+$("downloadPng").onclick = () => {
+  const c = document.createElement("canvas"); c.width = c.height = 512;
+  const x = c.getContext("2d");
+  x.fillStyle = col("bg"); x.fillRect(0,0,512,512);
+  const k = 380/W, ox = (512-W*k)/2, oy = (512-H*k)/2;
+  drawPolygon(x, pts.slice(0,3).map(p=>[p[0]*k+ox, p[1]*k+oy]), col("l1"), col("l2"), 1);
+  drawPolygon(x, pts.slice(3,6).map(p=>[p[0]*k+ox, p[1]*k+oy]), col("r1"), col("r2"), 1);
+  const a = document.createElement("a"); a.download = "nitronbox-logo.png"; a.href = c.toDataURL(); a.click();
+};
+
+render();
+</script>
+</body>
+</html>

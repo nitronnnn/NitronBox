@@ -1,15 +1,32 @@
 <?xml version="1.0" encoding="utf-8"?>
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- Left blade of the N: rises to the right, vertical right edge. -->
-    <path
-        android:fillColor="#8AB6FF"
-        android:pathData="M30,77 L50,31 L50,77 Z" />
-    <!-- Right blade of the N: falls to the right, vertical left edge; a clear gap splits the mark. -->
-    <path
-        android:fillColor="#3FC8F5"
-        android:pathData="M58,31 L78,77 L58,77 Z" />
+    <path android:pathData="M47.93,38.81 L54,49.44 L22.11,67.67 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="47.93"
+                android:startY="38.81"
+                android:endX="47.93"
+                android:endY="67.67"
+                android:type="linear"
+                android:startColor="#FFFFFF"
+                android:endColor="#666666" />
+        </aapt:attr>
+    </path>
+    <path android:pathData="M49.44,54 L81.33,35.78 L55.52,64.63 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="49.44"
+                android:startY="35.78"
+                android:endX="49.44"
+                android:endY="64.63"
+                android:type="linear"
+                android:startColor="#FFFFFF"
+                android:endColor="#545454" />
+        </aapt:attr>
+    </path>
 </vector>
