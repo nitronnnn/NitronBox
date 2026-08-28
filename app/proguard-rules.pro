@@ -1,0 +1,3 @@
+-keepattributes Signature,*Annotation*
+-keep class com.nitronbox.app.data.remote.dto.** { *; }
+-dontwarn org.conscrypt.**
