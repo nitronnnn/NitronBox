@@ -344,7 +344,7 @@ class ChatService(
                 val path = obj["path"]?.jsonPrimitive?.contentOrNull
                 action + (path?.let { " \u00b7 $it" } ?: "")
             }.getOrDefault("tool")
-            sb.append("\u27e6tool\u27e7 ").append(parsed).append('\n')
+            sb.append('\n').append("\u27e6tool\u27e7 ").append(parsed).append('\n')
             cursor = closingFence(text, jsonEnd + 1).let { if (it == -1) text.length else it + 3 }
             lastComplete = cursor
         }

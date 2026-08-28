@@ -435,7 +435,7 @@ class HttpAiProviderBridge(
         )
     }
 
-    private fun resolve(path: String): String = profile.baseUrl.trimEnd('/') + "/" + path.trimStart('/')
+    private fun resolve(path: String): String = profile.normalizedBaseUrl() + "/" + path.trimStart('/')
 
     private data class WireRequest(val path: String, val body: JsonObject)
     private data class ModelCacheEntry(val models: List<DiscoveredModel>, val expiresAt: Long)

@@ -13,7 +13,33 @@ data class ProviderProfile(
     val customHeaders: Map<String, String> = emptyMap(),
     val connectTimeoutSeconds: Long = 20,
     val readTimeoutSeconds: Long = 120,
-)
+) {
+    /**
+     * Base URL with redundant API suffixes removed. Users habitually paste endpoints like
+     * `https://host/v1/chat/completions`; the bridge appends protocol paths itself, so any
+     * of the well-known suffixes are trimmed repeatedly from the end.
+     */
+    fun normalizedBaseUrl(): String {
+        var url = baseUrl.trim().trimEnd('/')
+        val suffixes = listOf(
+            "chat/completions", "completions", "messages", "streamGenerateContent",
+            "generateContent", "models", "embeddings", "api/chat", "api/generate",
+            "api/tags", "api/embed", "v1", "v1beta", "v1alpha", "v2",
+        ).sortedByDescending { it.length }
+        var changed = true
+        while (changed) {
+            changed = false
+            for (suffix in suffixes) {
+                val candidate = "/" + suffix
+                if (url.endsWith(candidate, ignoreCase = true)) {
+                    url = url.removeSuffix(candidate).trimEnd('/')
+                    changed = true
+                }
+            }
+        }
+        return url
+    }
+}
 
 @Serializable
 enum class ProviderProtocol {

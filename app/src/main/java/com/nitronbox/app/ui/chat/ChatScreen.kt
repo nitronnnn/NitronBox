@@ -200,7 +200,7 @@ fun ChatScreen(
                         contentPadding = PaddingValues(
                             start = 14.dp,
                             end = 14.dp,
-                            top = 86.dp,
+                            top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 78.dp,
                             bottom = 132.dp,
                         ),
                         verticalArrangement = Arrangement.spacedBy(14.dp),
@@ -518,7 +518,7 @@ private fun WelcomeCard(
     Column(
         Modifier
             .fillMaxWidth()
-            .nitronSurface(SurfaceLevel.Raised, NitronTheme.shapes.large)
+            .frostPanel(NitronTheme.shapes.large)
             .padding(20.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -579,11 +579,8 @@ private fun MessageBubble(
                 .widthIn(max = 640.dp)
                 .fillMaxWidth(if (isUser) 0.85f else 0.96f)
                 .then(
-                    if (isUser) {
-                        Modifier.background(NitronTheme.colors.userBubble, NitronTheme.shapes.large)
-                    } else {
-                        Modifier.nitronSurface(SurfaceLevel.Raised, NitronTheme.shapes.large)
-                    },
+                    // Same frosted material for both roles — one color, real backdrop blur.
+                    Modifier.frostPanel(NitronTheme.shapes.large),
                 )
                 .combinedClickable(
                     onClick = {},
@@ -629,13 +626,15 @@ private fun MessageBubble(
                 if (message.content.isEmpty() && message.status == MessageStatus.STREAMING) {
                     StreamingDots(strings.thinking)
                 } else {
+                    val markerRegex = remember { Regex("\\u27e6tool\\u27e7[^\\n]*") }
                     val toolLines = remember(message.content) {
-                        message.content.lines().filter { it.trimStart().startsWith("\u27e6tool\u27e7") }
+                        markerRegex.findAll(message.content).map { it.value.removePrefix("\u27e6tool\u27e7 ").trim() }.toList()
                     }
                     val markdownText = remember(message.content) {
-                        message.content.lines()
-                            .filterNot { it.trimStart().startsWith("\u27e6tool\u27e7") }
-                            .joinToString("\n")
+                        message.content
+                            .replace(markerRegex, "")
+                            .replace("\n{3,}", "\n\n")
+                            .trimStart()
                     }
                     if (toolLines.isNotEmpty()) {
                         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
