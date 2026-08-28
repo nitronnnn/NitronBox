@@ -200,17 +200,49 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
 
-    fun testProvider(profileId: String) {
+    /** Health-checks a possibly-unsaved draft provider straight from the editor form. */
+    fun testDraft(profile: ProviderProfile) {
         viewModelScope.launch {
             _busy.value = true
             try {
-                val bridge = bridgeFor(profileId) ?: return@launch
+                val bridge = runCatching {
+                    container.providerRegistryFactory.create(listOf(profile)).require(profile.id)
+                }.getOrElse {
+                    emit(it.message ?: "Invalid provider")
+                    return@launch
+                }
                 val health = bridge.healthCheck()
-                _providerHealth.value = _providerHealth.value + (profileId to health)
-                emit(
-                    if (health.reachable) "Provider reachable (${health.latencyMillis} ms)"
-                    else "Unreachable: ${health.detail ?: "unknown error"}",
-                )
+                _providerHealth.value = _providerHealth.value + (profile.id to health)
+                emit(if (health.reachable) "Provider reachable (${health.latencyMillis} ms)" else "Unreachable: ${health.detail ?: "unknown error"}")
+            } finally {
+                _busy.value = false
+            }
+        }
+    }
+
+    fun testProvider(profileId: String) {
+        viewModelScope.launch {
+            repository.providerProfile(profileId)?.let { testDraft(it) }
+        }
+    }
+
+    /** Discovers models for a possibly-unsaved draft provider and caches them app-wide. */
+    fun discoverDraft(profile: ProviderProfile) {
+        viewModelScope.launch {
+            _busy.value = true
+            try {
+                val bridge = runCatching {
+                    container.providerRegistryFactory.create(listOf(profile)).require(profile.id)
+                }.getOrElse {
+                    emit(it.message ?: "Invalid provider")
+                    return@launch
+                }
+                val models = runCatching { bridge.discoverModels(forceRefresh = true) }.getOrElse {
+                    emit("Model discovery failed: ${it.message}")
+                    return@launch
+                }
+                container.modelCatalogStore.putModels(profile.id, models)
+                emit("Loaded ${models.size} models")
             } finally {
                 _busy.value = false
             }
@@ -219,17 +251,7 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
 
     fun discoverModels(profileId: String) {
         viewModelScope.launch {
-            _busy.value = true
-            try {
-                val models = container.modelCatalogStore.refresh(profileId)
-                if (models != null) {
-                    emit("Loaded ${models.size} models")
-                } else {
-                    emit("Model discovery failed. Check the endpoint and API key.")
-                }
-            } finally {
-                _busy.value = false
-            }
+            repository.providerProfile(profileId)?.let { discoverDraft(it) }
         }
     }
 

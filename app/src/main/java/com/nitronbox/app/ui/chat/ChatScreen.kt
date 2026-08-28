@@ -691,7 +691,7 @@ private fun MessageBubble(
                         Spacer(Modifier.height(8.dp))
                     }
                     MarkdownRenderer(
-                        markdown = message.content + if (message.status == MessageStatus.STREAMING) " ▍" else "",
+                        markdown = markdownText + if (message.status == MessageStatus.STREAMING) " ▍" else "",
                         onLinkClick = { url ->
                             runCatching {
                                 val uri = Uri.parse(url)

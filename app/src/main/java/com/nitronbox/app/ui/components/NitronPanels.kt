@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
@@ -144,6 +145,7 @@ fun NitronCenterDialog(
     ) {
         Box(
             Modifier
+                .wrapContentSize(Alignment.Center)
                 .padding(horizontal = 32.dp)
                 .imePadding()
                 .frostPanel(NitronTheme.shapes.large),
