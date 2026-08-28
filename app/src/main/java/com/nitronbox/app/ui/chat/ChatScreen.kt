@@ -59,6 +59,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.ArrowUpward
 import androidx.compose.material.icons.rounded.AttachFile
+import androidx.compose.material.icons.rounded.Build
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Delete
@@ -108,12 +109,15 @@ import com.nitronbox.app.ui.components.TextButtonFlat
 import com.nitronbox.app.ui.components.ModelPickerSheet
 import com.nitronbox.app.ui.chat.components.MarkdownRenderer
 import com.nitronbox.app.ui.i18n.LocalStrings
+import com.nitronbox.app.ui.theme.LocalHazeState
 import com.nitronbox.app.ui.theme.LocalUiFx
 import com.nitronbox.app.ui.theme.NitronTheme
 import com.nitronbox.app.ui.theme.SurfaceLevel
 import com.nitronbox.app.ui.theme.WallpaperBackdrop
 import com.nitronbox.app.ui.theme.nitronSurface
+import com.nitronbox.app.ui.components.frostPanel
 import com.nitronbox.app.ui.theme.pressableRipple
+import dev.chrisbanes.haze.hazeSource
 
 @Composable
 fun ChatScreen(
@@ -145,6 +149,8 @@ fun ChatScreen(
         },
         containerColor = Color.Transparent,
     ) { scaffoldPadding ->
+        val hazeState = androidx.compose.runtime.remember { dev.chrisbanes.haze.HazeState() }
+        androidx.compose.runtime.CompositionLocalProvider(LocalHazeState provides hazeState) {
         var conversationsOpen by remember { mutableStateOf(false) }
         var modelPickerOpen by remember { mutableStateOf(false) }
         var renaming by remember { mutableStateOf<com.nitronbox.app.data.local.ConversationEntity?>(null) }
@@ -166,7 +172,7 @@ fun ChatScreen(
                 .fillMaxSize()
                 .background(NitronTheme.colors.background),
         ) {
-            // Everything beneath the overlays blurs together: wallpaper, chat, composer.
+            // Content is the haze source; frosted surfaces above blur it for real.
             val listState = rememberLazyListState()
             // Parallax: the wallpaper trails the scroll for depth.
             val parallax by remember {
@@ -174,7 +180,7 @@ fun ChatScreen(
                     (listState.firstVisibleItemIndex * 800 + listState.firstVisibleItemScrollOffset).toFloat()
                 }
             }
-            Box(Modifier.fillMaxSize().blur(blurRadius * blurProgress)) {
+            Box(Modifier.fillMaxSize().hazeSource(hazeState)) {
                 WallpaperBackdrop(
                     wallpaper,
                     wallpaperImageUri,
@@ -183,20 +189,6 @@ fun ChatScreen(
                         .graphicsLayer { translationY = parallax * 0.12f },
                 )
                 Column(Modifier.fillMaxSize()) {
-                    val statusTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
-
-                    ChatHeader(
-                        title = conversation?.title ?: workspace?.name ?: "NitronBox",
-                        modelLabel = model?.displayName ?: strings.noModelSelected,
-                        onOpenConversations = { conversationsOpen = true },
-                        onOpenModelPicker = { modelPickerOpen = true },
-                        onNewConversation = viewModel::newConversation,
-                        onOpenSettings = onOpenSettings,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = statusTop + 6.dp, start = 14.dp, end = 14.dp),
-                    )
-
                     LaunchedEffect(messages.itemCount) {
                         if (messages.itemCount > 0) listState.scrollToItem(0)
                     }
@@ -208,7 +200,7 @@ fun ChatScreen(
                         contentPadding = PaddingValues(
                             start = 14.dp,
                             end = 14.dp,
-                            top = 12.dp,
+                            top = 86.dp,
                             bottom = 132.dp,
                         ),
                         verticalArrangement = Arrangement.spacedBy(14.dp),
@@ -239,6 +231,20 @@ fun ChatScreen(
                         }
                     }
                 }
+
+                }
+
+                ChatHeader(
+                    title = conversation?.title ?: workspace?.name ?: "NitronBox",
+                    modelLabel = model?.displayName ?: strings.noModelSelected,
+                    onOpenConversations = { conversationsOpen = true },
+                    onOpenModelPicker = { modelPickerOpen = true },
+                    onNewConversation = viewModel::newConversation,
+                    onOpenSettings = onOpenSettings,
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(top = statusTopForHeader(), start = 14.dp, end = 14.dp),
+                )
 
                 Composer(
                     draft = draft,
@@ -290,7 +296,7 @@ fun ChatScreen(
                             .fillMaxHeight()
                             .fillMaxWidth(0.88f)
                             .padding(start = 8.dp, top = 8.dp, bottom = 8.dp)
-                            .nitronSurface(SurfaceLevel.Overlay, RoundedCornerShape(26.dp)),
+                            .frostPanel(RoundedCornerShape(26.dp)),
                     ) {
                         ConversationsPanel(
                             viewModel = viewModel,
@@ -448,6 +454,10 @@ private fun openAttachment(
 }
 
 @Composable
+private fun statusTopForHeader(): androidx.compose.ui.unit.Dp =
+    WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+
+@Composable
 private fun ChatHeader(
     title: String,
     modelLabel: String,
@@ -460,9 +470,7 @@ private fun ChatHeader(
     val strings = LocalStrings.current
     Row(
         modifier
-            .clip(NitronTheme.shapes.large)
-            // Frosted header: chat content scrolls beneath a translucent veil.
-            .background(NitronTheme.colors.background.copy(alpha = 0.72f))
+            .frostPanel(NitronTheme.shapes.large)
             .border(1.dp, NitronTheme.colors.border, NitronTheme.shapes.large)
             .padding(horizontal = 6.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -574,7 +582,7 @@ private fun MessageBubble(
                     if (isUser) {
                         Modifier.background(NitronTheme.colors.userBubble, NitronTheme.shapes.large)
                     } else {
-                        Modifier.nitronSurface(SurfaceLevel.Raised, NitronTheme.shapes.large)
+                        Modifier.frostPanel(NitronTheme.shapes.large)
                     },
                 )
                 .combinedClickable(
@@ -621,6 +629,43 @@ private fun MessageBubble(
                 if (message.content.isEmpty() && message.status == MessageStatus.STREAMING) {
                     StreamingDots(strings.thinking)
                 } else {
+                    val toolLines = remember(message.content) {
+                        message.content.lines().filter { it.trimStart().startsWith("\u27e6tool\u27e7") }
+                    }
+                    val markdownText = remember(message.content) {
+                        message.content.lines()
+                            .filterNot { it.trimStart().startsWith("\u27e6tool\u27e7") }
+                            .joinToString("\n")
+                    }
+                    if (toolLines.isNotEmpty()) {
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            toolLines.forEach { line ->
+                                val label = line.trimStart().removePrefix("\u27e6tool\u27e7 ").trim()
+                                Row(
+                                    Modifier
+                                        .nitronSurface(SurfaceLevel.Muted, NitronTheme.shapes.pill)
+                                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Icon(
+                                        Icons.Rounded.Build,
+                                        null,
+                                        tint = NitronTheme.colors.accent,
+                                        modifier = Modifier.size(14.dp),
+                                    )
+                                    Spacer(Modifier.padding(3.dp))
+                                    Text(
+                                        label,
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = NitronTheme.colors.textPrimary,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
+                            }
+                        }
+                        Spacer(Modifier.height(8.dp))
+                    }
                     MarkdownRenderer(
                         markdown = message.content + if (message.status == MessageStatus.STREAMING) " ▍" else "",
                         onLinkClick = { url ->
@@ -819,7 +864,7 @@ private fun Composer(
     Column(
         modifier
             .fillMaxWidth()
-            .nitronSurface(SurfaceLevel.Overlay, NitronTheme.shapes.extraLarge)
+            .frostPanel(NitronTheme.shapes.extraLarge)
             .padding(7.dp),
     ) {
         AnimatedVisibility(

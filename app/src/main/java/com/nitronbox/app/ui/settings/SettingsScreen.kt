@@ -73,6 +73,8 @@ import com.nitronbox.app.ui.theme.nitronSurface
 import androidx.compose.material3.Switch
 import com.nitronbox.app.ui.components.AnimatedSegmented
 import com.nitronbox.app.ui.components.NitronBottomPanel
+import com.nitronbox.app.ui.theme.LocalHazeState
+import dev.chrisbanes.haze.hazeSource
 import com.nitronbox.app.ui.components.NitronCenterDialog
 import com.nitronbox.app.ui.components.TextButtonFlat
 import com.nitronbox.app.ui.theme.pressableRipple
@@ -125,19 +127,13 @@ fun SettingsScreen(
     val blurredPanels by viewModel.blurredPanels.collectAsState()
     val galleryImages by viewModel.galleryImages.collectAsState()
 
-    // Every overlay on this screen blurs the settings content beneath it.
-    val overlayOpen = editingProvider != null || prefill != null ||
-        wallpaperOpen || deletingProvider != null || skillDraft != null
-    val blurProgress by androidx.compose.animation.core.animateFloatAsState(
-        targetValue = if (overlayOpen) 1f else 0f,
-        label = "settingsBlur",
-    )
-
+    val hazeState = androidx.compose.runtime.remember { dev.chrisbanes.haze.HazeState() }
+    androidx.compose.runtime.CompositionLocalProvider(LocalHazeState provides hazeState) {
     Box(modifier.fillMaxSize().background(NitronTheme.colors.background)) {
     Scaffold(
         modifier = Modifier
             .fillMaxSize()
-            .blur(20.dp * blurProgress),
+            .hazeSource(hazeState),
         topBar = {
             TopAppBar(
                 title = { Text(strings.settings) },
@@ -455,6 +451,7 @@ fun SettingsScreen(
                 }
             }
         }
+    }
     }
     }
 }

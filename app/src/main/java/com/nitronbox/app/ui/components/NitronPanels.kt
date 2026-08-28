@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -32,12 +33,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
+import dev.chrisbanes.haze.HazeTint
+import dev.chrisbanes.haze.hazeEffect
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.nitronbox.app.ui.theme.LocalHazeState
 import com.nitronbox.app.ui.theme.LocalUiFx
 import com.nitronbox.app.ui.theme.NitronTheme
 
@@ -58,19 +62,26 @@ fun OverlayScrim(
     }
 }
 
-/** Panel surface material: frosted translucent when enabled in settings, solid otherwise. */
+/**
+ * Panel surface material: real backdrop blur (Haze) when the screen provides a haze state
+ * and frosted panels are enabled; a solid surface otherwise.
+ */
 @Composable
-private fun panelSurfaceModifier(shape: androidx.compose.ui.graphics.Shape): Modifier {
+fun Modifier.frostPanel(shape: androidx.compose.ui.graphics.Shape): Modifier {
     val fx = LocalUiFx.current
-    val color = if (fx.blurredPanels) {
-        NitronTheme.colors.background.copy(alpha = 0.82f)
+    val state = LocalHazeState.current
+    val tintColor = NitronTheme.colors.background.copy(alpha = 0.78f)
+    val radius = fx.blurRadius.dp
+    val base = if (fx.blurredPanels && fx.blurEnabled && state != null) {
+        Modifier.hazeEffect(state) {
+            tints = listOf(HazeTint(tintColor))
+            blurRadius = radius
+            noiseFactor = 0f
+        }
     } else {
-        NitronTheme.colors.background
+        Modifier.background(NitronTheme.colors.background)
     }
-    return Modifier
-        .clip(shape)
-        .background(color)
-        .pointerInput(Unit) {}
+    return clip(shape).then(base).pointerInput(Unit) {}
 }
 
 /**
@@ -99,7 +110,8 @@ fun NitronBottomPanel(
             Modifier
                 .fillMaxWidth()
                 .heightIn(max = 900.dp * maxHeightFraction)
-                .then(panelSurfaceModifier(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))),
+                .imePadding()
+                .frostPanel(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)),
         ) {
             content()
         }
@@ -125,7 +137,8 @@ fun NitronCenterDialog(
         Box(
             Modifier
                 .padding(horizontal = 32.dp)
-                .then(panelSurfaceModifier(NitronTheme.shapes.large)),
+                .imePadding()
+                .frostPanel(NitronTheme.shapes.large),
         ) {
             content()
         }

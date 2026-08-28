@@ -23,8 +23,8 @@ android {
         applicationId = "com.nitronbox.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 10
-        versionName = "9.4.1"
+        versionCode = 11
+        versionName = "9.5.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
@@ -129,6 +129,7 @@ dependencies {
     implementation(libs.google.play.services.base)
     implementation(libs.coil.compose)
     implementation(libs.pdfbox.android)
+    implementation(libs.haze)
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.test.junit)

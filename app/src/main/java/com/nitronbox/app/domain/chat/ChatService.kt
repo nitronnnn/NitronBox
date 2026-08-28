@@ -20,6 +20,9 @@ import com.nitronbox.app.data.remote.InlineImage
 import com.nitronbox.app.data.remote.ProviderRegistry
 import com.nitronbox.app.domain.context.ContextAssembly
 import com.nitronbox.app.domain.context.ContextWindowEngine
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import androidx.documentfile.provider.DocumentFile
 import java.util.UUID
 import kotlinx.coroutines.CancellationException
@@ -70,16 +73,12 @@ class ChatService(
                 }
             }
         }
-        val documentText = withContext(Dispatchers.IO) { inlineDocumentText(attachments) }
-        val content = if (documentText.isBlank()) {
-            text
-        } else {
-            text + "\n\n" + documentText
-        }
+        // The bubble shows only the user text + attachment chips; document contents are
+        // injected into the request transcript at generation time, never displayed here.
         val message = ChatMessage(
             conversationId = resolvedConversationId,
             role = MessageRole.USER,
-            content = content,
+            content = text,
             attachments = attachments,
         )
         repository.saveMessage(message)
@@ -116,6 +115,7 @@ class ChatService(
 
         val history = repository.contextMessages(conversationId)
             .filter { it.status != MessageStatus.FAILED && it.status != MessageStatus.QUEUED }
+            .map { enrichWithAttachments(it) }
         val conversation = repository.conversation(conversationId)
         val existingSummary = conversation?.let {
             ConversationSummary(
@@ -223,10 +223,10 @@ class ChatService(
                     persist(MessageStatus.FAILED, "The model returned an empty response.")
                     return TurnOutcome.Failed("The model returned an empty response.")
                 }
-                content.append(roundContent)
+                content.append(withToolMarkers(roundContent.toString()))
 
                 val blocks = if (root != null) {
-                    TOOL_BLOCK.findAll(roundContent.toString()).toList()
+                    extractToolBlocks(roundContent.toString())
                 } else emptyList()
                 if (blocks.isEmpty() || iteration >= MAX_TOOL_ITERATIONS) {
                     generationMillis = System.currentTimeMillis() - startedAt
@@ -235,8 +235,12 @@ class ChatService(
                 }
 
                 // Execute tools; results are visible to the model through the transcript only.
-                val results = blocks.mapIndexedNotNull { index, match ->
-                    root?.let { r -> creatorTools?.executeTool(r, match.groupValues[1])?.let { res -> "[$index] $res" } }
+                // Parse failures are fed back so the model can correct its format.
+                val results = blocks.mapIndexed { index, match ->
+                    val executed = root?.let { r ->
+                        creatorTools?.executeTool(r, match)
+                    } ?: "[tool error] no project folder is available"
+                    "[$index] " + (executed ?: "[tool error] could not parse this block; emit one-line JSON with action/path/content")
                 }
                 transcript.add(
                     ChatMessage(
@@ -275,6 +279,81 @@ class ChatService(
     }
 
     /**
+     * Chat display version of a round: every completed fenced tool block collapses into a
+     * compact marker line (rendered as a chip by the UI); raw JSON never reaches the chat.
+     * An unterminated trailing block (still streaming) is hidden until its fence closes.
+     */
+    private fun withToolMarkers(text: String): String {
+        val hasTools = text.contains("```tool") || text.contains("```nitron:tool")
+        if (!hasTools) return text
+        val sb = StringBuilder()
+        var cursor = 0
+        var lastComplete = 0
+        while (true) {
+            val toolIdx = text.indexOf("```tool", cursor).let { t ->
+                val nitron = text.indexOf("```nitron:tool", cursor)
+                if (nitron != -1 && (t == -1 || nitron < t)) nitron else t
+            }
+            if (toolIdx == -1) {
+                sb.append(text.substring(cursor))
+                lastComplete = text.length
+                break
+            }
+            val jsonStart = text.indexOf('{', toolIdx)
+            if (jsonStart == -1) {
+                sb.append(text.substring(cursor, toolIdx))
+                break
+            }
+            var depth = 0
+            var inString = false
+            var escaped = false
+            var jsonEnd = -1
+            var scan = jsonStart
+            while (scan < text.length) {
+                val ch = text[scan]
+                if (escaped) {
+                    escaped = false
+                } else {
+                    when {
+                        ch == '\\' && inString -> escaped = true
+                        ch == '"' -> inString = !inString
+                        !inString && ch == '{' -> depth++
+                        !inString && ch == '}' -> {
+                            depth--
+                            if (depth == 0) {
+                                jsonEnd = scan
+                                break
+                            }
+                        }
+                    }
+                }
+                scan++
+            }
+            if (jsonEnd == -1) {
+                // Half-streamed block: cut the tail so raw JSON never flashes in the chat.
+                sb.append(text.substring(cursor, toolIdx))
+                lastComplete = toolIdx
+                break
+            }
+            sb.append(text.substring(cursor, toolIdx))
+            val json = text.substring(jsonStart, jsonEnd + 1)
+            val parsed = runCatching {
+                val obj = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
+                    .parseToJsonElement(json).jsonObject
+                val action = obj["action"]?.jsonPrimitive?.contentOrNull ?: "tool"
+                val path = obj["path"]?.jsonPrimitive?.contentOrNull
+                action + (path?.let { " \u00b7 $it" } ?: "")
+            }.getOrDefault("tool")
+            sb.append("\u27e6tool\u27e7 ").append(parsed).append('\n')
+            cursor = closingFence(text, jsonEnd + 1).let { if (it == -1) text.length else it + 3 }
+            lastComplete = cursor
+        }
+        var result = sb.toString()
+        if (lastComplete < text.length) result = result.take(lastComplete.coerceAtMost(result.length))
+        return result.trimEnd('\n')
+    }
+
+    /**
      * Deletes a message. Returns its conversation id when an assistant reply was removed and can
      * be regenerated, or null for user messages (deletion only).
      */
@@ -282,6 +361,19 @@ class ChatService(
         val message = repository.message(messageId) ?: return null
         repository.deleteMessage(messageId)
         return message.conversationId.takeIf { message.role == MessageRole.ASSISTANT }
+    }
+
+
+    /**
+     * Model-side enrichment: text-like and PDF attachments get their contents appended to the
+     * request transcript. Displayed messages stay clean — only chips, never the raw file text.
+     */
+    private suspend fun enrichWithAttachments(message: ChatMessage): ChatMessage {
+        if (message.role != MessageRole.USER || message.attachments.isEmpty()) return message
+        if (message.content.contains("[Attached file:")) return message
+        val documentText = withContext(Dispatchers.IO) { inlineDocumentText(message.attachments) }
+        if (documentText.isBlank()) return message
+        return message.copy(content = message.content + "\n\n" + documentText)
     }
 
     private suspend fun resolveInlineImages(
@@ -325,6 +417,54 @@ class ChatService(
         .take(ChatRepository.TITLE_MAX_LENGTH)
         .ifBlank { "New conversation" }
 
+
+    /**
+     * Extracts fenced `tool {...}` blocks with a brace-balanced scanner. The JSON may span
+     * lines and contain nested objects/strings with braces — a lazy regex breaks on those.
+     */
+    private fun extractToolBlocks(text: String): List<String> {
+        val calls = mutableListOf<String>()
+        var searchFrom = 0
+        while (true) {
+            val toolIdx = text.indexOf("```tool", searchFrom).let { t ->
+                val nitron = text.indexOf("```nitron:tool", searchFrom)
+                if (nitron != -1 && (t == -1 || nitron < t)) nitron else t
+            }
+            if (toolIdx == -1) break
+            val jsonStart = text.indexOf('{', toolIdx)
+            if (jsonStart == -1) break
+            var depth = 0
+            var inString = false
+            var escaped = false
+            var jsonEnd = -1
+            var cursor = jsonStart
+            while (cursor < text.length) {
+                val ch = text[cursor]
+                if (escaped) {
+                    escaped = false
+                } else {
+                    when {
+                        ch == '\\' && inString -> escaped = true
+                        ch == '"' -> inString = !inString
+                        !inString && ch == '{' -> depth++
+                        !inString && ch == '}' -> {
+                            depth--
+                            if (depth == 0) {
+                                jsonEnd = cursor
+                                break
+                            }
+                        }
+                    }
+                }
+                cursor++
+            }
+            if (jsonEnd == -1) break
+            calls.add(text.substring(jsonStart, jsonEnd + 1))
+            searchFrom = closingFence(text, jsonEnd + 1).let { if (it == -1) jsonEnd + 1 else it + 3 }
+        }
+        return calls
+    }
+
     private companion object {
         const val PERSIST_INTERVAL_MILLIS = 300L
         const val MAX_ERROR_CHARS = 2_000
@@ -332,8 +472,8 @@ class ChatService(
         const val MAX_INLINE_IMAGES = 4
         const val MAX_TOOL_ITERATIONS = 4
 
-        /** Fenced tool block: ```tool {"action":"...","path":"..."} ``` (nitron:tool also accepted). */
-        val TOOL_BLOCK = Regex("```(?:nitron:)?tool\\s*(\\{.*?\\})\\s*```", RegexOption.DOT_MATCHES_ALL)
+        /** Finds the end index of the closing fence after [from], or -1. */
+        fun closingFence(text: String, from: Int): Int = text.indexOf("```", from)
     }
 }
 

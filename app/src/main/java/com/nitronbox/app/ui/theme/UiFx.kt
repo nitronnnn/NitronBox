@@ -1,5 +1,7 @@
 package com.nitronbox.app.ui.theme
 
+import dev.chrisbanes.haze.HazeState
+
 import androidx.compose.runtime.compositionLocalOf
 
 /**
@@ -14,3 +16,6 @@ data class UiFxConfig(
 )
 
 val LocalUiFx = compositionLocalOf { UiFxConfig() }
+
+/** Per-screen haze state; screens that blur their content provide it here. */
+val LocalHazeState = compositionLocalOf<HazeState?> { null }
