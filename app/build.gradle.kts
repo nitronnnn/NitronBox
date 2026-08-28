@@ -1,9 +1,18 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
+}
+
+// Release signing credentials live in local.properties (never committed); when absent,
+// assembleRelease produces an unsigned APK.
+val keystoreProperties = Properties().apply {
+    val file = rootProject.file("local.properties")
+    if (file.exists()) file.inputStream().use(::load)
 }
 
 android {
@@ -14,8 +23,8 @@ android {
         applicationId = "com.nitronbox.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 3
+        versionName = "9.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
@@ -23,6 +32,18 @@ android {
 
     androidResources {
         localeFilters += listOf("en", "ru")
+    }
+
+    signingConfigs {
+        create("release") {
+            val storeFilePath = keystoreProperties.getProperty("nitronbox.storeFile")
+            if (storeFilePath != null) {
+                storeFile = rootProject.file(storeFilePath)
+                storePassword = keystoreProperties.getProperty("nitronbox.storePassword")
+                keyAlias = keystoreProperties.getProperty("nitronbox.keyAlias")
+                keyPassword = keystoreProperties.getProperty("nitronbox.keyPassword")
+            }
+        }
     }
 
     buildTypes {
@@ -37,6 +58,9 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
+            if (keystoreProperties.getProperty("nitronbox.storeFile") != null) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
 
