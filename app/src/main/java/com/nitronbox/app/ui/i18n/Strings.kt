@@ -184,7 +184,7 @@ val EnglishStrings = Strings(
     skillPrompt = "Prompt",
     blurBackground = "Background blur",
     blurredPanels = "Frosted panels",
-    strength = "Strength",
+    strength = "Background blur strength",
     panelStrength = "Panel blur strength",
 )
 
@@ -274,7 +274,7 @@ val RussianStrings = Strings(
     skillPrompt = "Промпт",
     blurBackground = "Блюр фона",
     blurredPanels = "Блюренные панели",
-    strength = "Сила",
+    strength = "Сила блюра фона",
     panelStrength = "Сила блюра панелей",
 )
 

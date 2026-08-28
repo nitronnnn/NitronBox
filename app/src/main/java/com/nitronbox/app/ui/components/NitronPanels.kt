@@ -226,7 +226,7 @@ fun FrostSurface(
                 Modifier
                     .matchParentSize()
                     .graphicsLayer { translationY = (geo.top + geo.parallax) - myTop }
-                    .blur(fx.blurRadius.dp),
+                    .blur(24.dp),
             )
             Box(
                 Modifier

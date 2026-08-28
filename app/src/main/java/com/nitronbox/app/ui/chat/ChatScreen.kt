@@ -195,14 +195,15 @@ fun ChatScreen(
             ) {
             // Content is the haze source; frosted surfaces above blur it for real.
             // The content itself also blurs while an overlay is open.
-            Box(Modifier.fillMaxSize().blur(blurRadius * blurProgress)) {
+            // Content behind the open drawer/picker always blurs — constant, not a setting.
+            Box(Modifier.fillMaxSize().blur(24.dp * blurProgress)) {
             Box(Modifier.fillMaxSize().hazeSource(hazeState)) {
                 WallpaperBackdrop(
                     wallpaper,
                     wallpaperImageUri,
                     Modifier
                         .matchParentSize()
-                        .blur(fx.blurRadius.dp)
+                        .blur(if (fx.blurEnabled) fx.blurRadius.dp else 0.dp)
                         .onGloballyPositioned { wallpaperTop = it.positionInRoot().y }
                         .graphicsLayer { translationY = parallax * 0.12f },
                 )
