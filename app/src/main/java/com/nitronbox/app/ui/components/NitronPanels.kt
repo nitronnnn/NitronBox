@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.setValue
@@ -36,11 +37,16 @@ import androidx.compose.ui.draw.blur
 import dev.chrisbanes.haze.HazeTint
 import dev.chrisbanes.haze.hazeEffect
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.nitronbox.app.data.settings.WallpaperPreset
 import com.nitronbox.app.ui.theme.LocalHazeState
 import com.nitronbox.app.ui.theme.LocalUiFx
 import com.nitronbox.app.ui.theme.NitronTheme
@@ -179,5 +185,57 @@ fun SpinningLogo(
         contentAlignment = Alignment.Center,
     ) {
         NitronLogo(modifier = Modifier.size(size))
+    }
+}
+
+
+/** Where the chat wallpaper sits on screen, so surfaces can sample it for frosted glass. */
+data class WallpaperGeometry(
+    val preset: WallpaperPreset,
+    val imageUri: String?,
+    val top: Float,
+    val parallax: Float,
+)
+
+val LocalWallpaperGeometry = compositionLocalOf<WallpaperGeometry?> { null }
+
+/**
+ * A frosted surface that samples the chat wallpaper directly: a copy of the wallpaper is
+ * rendered beneath the tint, shifted to match this surface's on-screen position and blurred.
+ * Works for nodes inside scrolling content, on every device.
+ */
+@Composable
+fun FrostSurface(
+    shape: androidx.compose.ui.graphics.Shape,
+    modifier: Modifier = Modifier,
+    tintAlpha: Float = 0.72f,
+    content: @Composable BoxScope.() -> Unit,
+) {
+    val fx = LocalUiFx.current
+    val geo = LocalWallpaperGeometry.current
+    var myTop by remember { mutableStateOf(0f) }
+    Box(
+        modifier
+            .clip(shape)
+            .onGloballyPositioned { myTop = it.positionInRoot().y },
+    ) {
+        if (geo != null) {
+            com.nitronbox.app.ui.theme.WallpaperBackdrop(
+                geo.preset,
+                geo.imageUri,
+                Modifier
+                    .matchParentSize()
+                    .graphicsLayer { translationY = (geo.top + geo.parallax) - myTop }
+                    .blur(if (fx.blurEnabled) fx.blurRadius.dp else 0.dp),
+            )
+            Box(
+                Modifier
+                    .matchParentSize()
+                    .background(NitronTheme.colors.background.copy(alpha = tintAlpha)),
+            )
+        } else {
+            Box(Modifier.matchParentSize().background(NitronTheme.colors.background))
+        }
+        content()
     }
 }

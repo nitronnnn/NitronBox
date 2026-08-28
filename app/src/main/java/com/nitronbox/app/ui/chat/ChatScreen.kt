@@ -103,6 +103,9 @@ import com.nitronbox.app.data.model.ChatMessage
 import com.nitronbox.app.data.model.MessageRole
 import com.nitronbox.app.data.model.MessageStatus
 import com.nitronbox.app.ui.components.ConversationsPanel
+import com.nitronbox.app.ui.components.FrostSurface
+import com.nitronbox.app.ui.components.LocalWallpaperGeometry
+import com.nitronbox.app.ui.components.WallpaperGeometry
 import com.nitronbox.app.ui.components.NitronCenterDialog
 import com.nitronbox.app.ui.components.SpinningLogo
 import com.nitronbox.app.ui.components.TextButtonFlat
@@ -173,6 +176,8 @@ fun ChatScreen(
                 .background(NitronTheme.colors.background),
         ) {
             // Content is the haze source; frosted surfaces above blur it for real.
+            // The content itself also blurs while an overlay is open.
+            Box(Modifier.fillMaxSize().blur(blurRadius * blurProgress)) {
             val listState = rememberLazyListState()
             // Parallax: the wallpaper trails the scroll for depth.
             val parallax by remember {
@@ -232,6 +237,7 @@ fun ChatScreen(
                     }
                 }
 
+                }
                 }
 
                 ChatHeader(
@@ -515,10 +521,13 @@ private fun WelcomeCard(
     onConfigureModels: () -> Unit,
 ) {
     val strings = LocalStrings.current
+    FrostSurface(
+        NitronTheme.shapes.large,
+        Modifier.fillMaxWidth(),
+    ) {
     Column(
         Modifier
             .fillMaxWidth()
-            .frostPanel(NitronTheme.shapes.large)
             .padding(20.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -550,6 +559,7 @@ private fun WelcomeCard(
             }
         }
     }
+    }
 }
 
 @Composable
@@ -574,14 +584,14 @@ private fun MessageBubble(
         Modifier.fillMaxWidth(),
         horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start,
     ) {
-        Column(
+        FrostSurface(
+            NitronTheme.shapes.large,
             Modifier
                 .widthIn(max = 640.dp)
-                .fillMaxWidth(if (isUser) 0.85f else 0.96f)
-                .then(
-                    // Same frosted material for both roles — one color, real backdrop blur.
-                    Modifier.frostPanel(NitronTheme.shapes.large),
-                )
+                .fillMaxWidth(if (isUser) 0.85f else 0.96f),
+        ) {
+        Column(
+            Modifier
                 .combinedClickable(
                     onClick = {},
                     onLongClick = { actionsOpen = true },
@@ -773,6 +783,7 @@ private fun MessageBubble(
                     }
                 }
             }
+        }
         }
     }
 }
