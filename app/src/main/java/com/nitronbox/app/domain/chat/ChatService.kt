@@ -59,6 +59,14 @@ class ChatService(
     ): PreparedUserMessage {
         val resolvedConversationId = conversationId
             ?: repository.createConversation(workspace.id, deriveTitle(text)).id
+        // A freshly created empty conversation gets a real title from its first message.
+        if (text.isNotBlank()) {
+            repository.conversation(resolvedConversationId)?.let { conversation ->
+                if (conversation.title == ChatRepository.DEFAULT_TITLE) {
+                    repository.renameConversation(resolvedConversationId, deriveTitle(text))
+                }
+            }
+        }
         val documentText = withContext(Dispatchers.IO) { inlineDocumentText(attachments) }
         val content = if (documentText.isBlank()) {
             text
@@ -132,7 +140,9 @@ class ChatService(
         var outputTokens: Int? = null
         var providerId: String? = null
         var modelId: String? = null
+        var generationMillis: Long? = null
         var lastPersistAt = 0L
+        val startedAt = System.currentTimeMillis()
 
         suspend fun persist(status: MessageStatus, errorText: String? = null) {
             repository.updateMessage(
@@ -144,6 +154,7 @@ class ChatService(
                     inputTokens = inputTokens,
                     outputTokens = outputTokens,
                     errorText = errorText,
+                    generationDurationMillis = generationMillis ?: (System.currentTimeMillis() - startedAt),
                 ),
             )
         }
@@ -178,6 +189,7 @@ class ChatService(
                 persist(MessageStatus.FAILED, "The model returned an empty response.")
                 TurnOutcome.Failed("The model returned an empty response.")
             } else {
+                generationMillis = System.currentTimeMillis() - startedAt
                 persist(MessageStatus.COMPLETE)
                 TurnOutcome.Completed
             }

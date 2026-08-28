@@ -15,7 +15,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         AttachmentEntity::class,
         ProviderProfileEntity::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = true,
 )
 abstract class NitronBoxDatabase : RoomDatabase() {
@@ -43,6 +43,13 @@ abstract class NitronBoxDatabase : RoomDatabase() {
             }
         }
 
+        /** v3 tracks wall-clock generation duration for tok/s and response-time stats. */
+        private val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE messages ADD COLUMN generationDurationMillis INTEGER")
+            }
+        }
+
         fun create(context: Context): NitronBoxDatabase = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(
                 context.applicationContext,
@@ -50,7 +57,7 @@ abstract class NitronBoxDatabase : RoomDatabase() {
                 "nitronbox.db",
             )
                 .setJournalMode(JournalMode.WRITE_AHEAD_LOGGING)
-                .addMigrations(MIGRATION_1_2)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                 .build()
                 .also { instance = it }
         }

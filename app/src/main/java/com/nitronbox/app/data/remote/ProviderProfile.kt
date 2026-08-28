@@ -22,6 +22,14 @@ enum class ProviderProtocol {
     GEMINI,
     OLLAMA;
 
+    /** Human-readable label used across settings and pickers. */
+    fun friendlyName(): String = when (this) {
+        OPENAI_COMPATIBLE -> "OpenAI compatible"
+        ANTHROPIC -> "Anthropic"
+        GEMINI -> "Gemini"
+        OLLAMA -> "Ollama"
+    }
+
     fun defaultDiscovery(): DiscoveryRequest = when (this) {
         OPENAI_COMPATIBLE -> DiscoveryRequest(path = "v1/models")
         ANTHROPIC -> DiscoveryRequest(path = "v1/models")

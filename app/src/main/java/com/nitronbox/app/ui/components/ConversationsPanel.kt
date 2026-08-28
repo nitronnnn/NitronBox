@@ -39,6 +39,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.nitronbox.app.data.local.ConversationEntity
 import com.nitronbox.app.ui.chat.ChatSessionViewModel
+import com.nitronbox.app.ui.i18n.LocalStrings
 import com.nitronbox.app.ui.theme.NitronTheme
 import com.nitronbox.app.ui.theme.SurfaceLevel
 import com.nitronbox.app.ui.theme.nitronSurface
@@ -52,6 +53,7 @@ fun ConversationsPanel(
     viewModel: ChatSessionViewModel,
     modifier: Modifier = Modifier,
 ) {
+    val strings = LocalStrings.current
     val conversations by viewModel.conversations.collectAsState()
     val activeConversation by viewModel.activeConversation.collectAsState()
     val workspaces by viewModel.workspaces.collectAsState()
@@ -62,7 +64,7 @@ fun ConversationsPanel(
 
     ModalDrawerSheet(modifier = modifier, drawerContainerColor = NitronTheme.colors.background) {
         Column(Modifier.padding(14.dp)) {
-            Text("Workspaces", style = MaterialTheme.typography.labelMedium, color = NitronTheme.colors.textSecondary)
+            Text(strings.workspaces, style = MaterialTheme.typography.labelMedium, color = NitronTheme.colors.textSecondary)
             Spacer(Modifier.height(8.dp))
             workspaces.forEach { workspace ->
                 val selected = workspace.id == activeWorkspace?.id
@@ -79,13 +81,13 @@ fun ConversationsPanel(
             Spacer(Modifier.height(16.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    "Conversations",
+                    strings.conversations,
                     style = MaterialTheme.typography.labelMedium,
                     color = NitronTheme.colors.textSecondary,
                     modifier = Modifier.weight(1f),
                 )
                 IconButton(onClick = viewModel::newConversation, modifier = Modifier.height(32.dp)) {
-                    Icon(Icons.Rounded.Add, "New conversation", tint = NitronTheme.colors.textPrimary, modifier = Modifier.height(18.dp))
+                    Icon(Icons.Rounded.Add, strings.newConversation, tint = NitronTheme.colors.textPrimary, modifier = Modifier.height(18.dp))
                 }
             }
             Spacer(Modifier.height(4.dp))
@@ -96,6 +98,7 @@ fun ConversationsPanel(
                     Row(
                         Modifier
                             .fillMaxWidth()
+                            .animateItem()
                             .nitronSurface(
                                 if (selected) SurfaceLevel.Muted else SurfaceLevel.Base,
                                 NitronTheme.shapes.small,
@@ -132,7 +135,7 @@ fun ConversationsPanel(
                             }
                             DropdownMenu(expanded = actionsOpen, onDismissRequest = { actionsOpen = false }) {
                                 DropdownMenuItem(
-                                    text = { Text("Rename") },
+                                    text = { Text(strings.rename) },
                                     leadingIcon = { Icon(Icons.Rounded.Edit, null) },
                                     onClick = {
                                         actionsOpen = false
@@ -140,7 +143,7 @@ fun ConversationsPanel(
                                     },
                                 )
                                 DropdownMenuItem(
-                                    text = { Text("Delete") },
+                                    text = { Text(strings.delete) },
                                     leadingIcon = { Icon(Icons.Rounded.Delete, null, tint = NitronTheme.colors.destructive) },
                                     onClick = {
                                         actionsOpen = false
@@ -159,7 +162,7 @@ fun ConversationsPanel(
         var title by remember(conversation.id) { mutableStateOf(conversation.title) }
         AlertDialog(
             onDismissRequest = { renaming = null },
-            title = { Text("Rename conversation") },
+            title = { Text(strings.renameConversation) },
             text = {
                 TextField(
                     value = title,
@@ -180,24 +183,24 @@ fun ConversationsPanel(
                         renaming = null
                     },
                     enabled = title.isNotBlank(),
-                ) { Text("Save") }
+                ) { Text(strings.save) }
             },
-            dismissButton = { TextButton(onClick = { renaming = null }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { renaming = null }) { Text(strings.cancel) } },
         )
     }
 
     deleting?.let { conversation ->
         AlertDialog(
             onDismissRequest = { deleting = null },
-            title = { Text("Delete conversation?") },
-            text = { Text("“${conversation.title}” and all of its messages will be removed permanently.") },
+            title = { Text(strings.deleteConversationTitle) },
+            text = { Text(strings.deleteConversationBody(conversation.title)) },
             confirmButton = {
                 TextButton(onClick = {
                     viewModel.deleteConversation(conversation.id)
                     deleting = null
-                }) { Text("Delete", color = NitronTheme.colors.destructive) }
+                }) { Text(strings.delete, color = NitronTheme.colors.destructive) }
             },
-            dismissButton = { TextButton(onClick = { deleting = null }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { deleting = null }) { Text(strings.cancel) } },
         )
     }
 }

@@ -1,5 +1,11 @@
 package com.nitronbox.app.ui.settings
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -9,13 +15,15 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
-import androidx.compose.material.icons.rounded.Add
-import androidx.compose.material.icons.rounded.ExpandLess
 import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -27,6 +35,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -45,13 +54,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.nitronbox.app.data.model.ContextOverflowStrategy
 import com.nitronbox.app.data.remote.ProviderProfile
 import com.nitronbox.app.data.remote.ProviderProtocol
+import com.nitronbox.app.data.settings.LanguageSetting
+import com.nitronbox.app.data.settings.ThemeModeSetting
+import com.nitronbox.app.ui.i18n.LocalStrings
 import com.nitronbox.app.ui.theme.NitronTheme
 import com.nitronbox.app.ui.theme.SurfaceLevel
 import com.nitronbox.app.ui.theme.nitronSurface
@@ -71,6 +83,7 @@ private data class ProviderTemplate(
     val protocol: ProviderProtocol,
     val baseUrl: String,
 )
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
@@ -78,11 +91,14 @@ fun SettingsScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val strings = LocalStrings.current
     val providers by viewModel.providers.collectAsState()
     val discovered by viewModel.discoveredModels.collectAsState()
     val health by viewModel.providerHealth.collectAsState()
     val busy by viewModel.busy.collectAsState()
     val workspace by viewModel.activeWorkspace.collectAsState()
+    val themeMode by viewModel.themeMode.collectAsState()
+    val language by viewModel.language.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
 
     LaunchedEffect(Unit) {
@@ -96,7 +112,7 @@ fun SettingsScreen(
         modifier = modifier,
         topBar = {
             TopAppBar(
-                title = { Text("Settings") },
+                title = { Text(strings.settings) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back", tint = NitronTheme.colors.textPrimary)
@@ -118,20 +134,25 @@ fun SettingsScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             item {
+                Text(
+                    strings.providers,
+                    style = MaterialTheme.typography.titleLarge,
+                    color = NitronTheme.colors.textPrimary,
+                )
+            }
+            item {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        "Providers",
-                        style = MaterialTheme.typography.titleLarge,
-                        color = NitronTheme.colors.textPrimary,
-                        modifier = Modifier.weight(1f),
+                        "One tap to add · ",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = NitronTheme.colors.textTertiary,
                     )
-                    if (busy) CircularProgressIndicator(modifier = Modifier.height(18.dp), strokeWidth = 2.dp)
+                    if (busy) CircularProgressIndicator(modifier = Modifier.height(16.dp), strokeWidth = 2.dp)
                 }
             }
             item {
-                androidx.compose.foundation.lazy.LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(PROVIDER_TEMPLATES.size) { index ->
-                        val template = PROVIDER_TEMPLATES[index]
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(PROVIDER_TEMPLATES) { template ->
                         Text(
                             "+ ${template.name}",
                             style = MaterialTheme.typography.labelLarge,
@@ -144,8 +165,16 @@ fun SettingsScreen(
                     }
                 }
             }
-            items(providers.size) { index ->
-                val profile = providers[index]
+            if (providers.isEmpty()) {
+                item {
+                    Text(
+                        strings.noProvidersHint,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = NitronTheme.colors.textSecondary,
+                    )
+                }
+            }
+            items(providers, key = { it.id }) { profile ->
                 ProviderCard(
                     profile = profile,
                     health = health[profile.id],
@@ -155,7 +184,7 @@ fun SettingsScreen(
             }
             item {
                 Text(
-                    "Tap a provider to edit its endpoint and API key. API keys are stored in the Android Keystore and never leave the device.",
+                    strings.providerHint,
                     style = MaterialTheme.typography.bodySmall,
                     color = NitronTheme.colors.textTertiary,
                 )
@@ -163,7 +192,46 @@ fun SettingsScreen(
             item { HorizontalDivider(color = NitronTheme.colors.border) }
             item {
                 Text(
-                    "Workspace",
+                    strings.appearance,
+                    style = MaterialTheme.typography.titleLarge,
+                    color = NitronTheme.colors.textPrimary,
+                )
+            }
+            item {
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .nitronSurface(SurfaceLevel.Raised, NitronTheme.shapes.medium)
+                        .padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Text(strings.theme, style = MaterialTheme.typography.labelLarge, color = NitronTheme.colors.textSecondary)
+                    SegmentedSelector(
+                        options = listOf(
+                            strings.themeSystem to ThemeModeSetting.SYSTEM,
+                            strings.themeLight to ThemeModeSetting.LIGHT,
+                            strings.themeDark to ThemeModeSetting.DARK,
+                        ),
+                        selected = themeMode,
+                        onSelect = viewModel::setThemeMode,
+                    )
+                    HorizontalDivider(color = NitronTheme.colors.border)
+                    Text(strings.language, style = MaterialTheme.typography.labelLarge, color = NitronTheme.colors.textSecondary)
+                    SegmentedSelector(
+                        options = listOf(
+                            strings.languageSystem to LanguageSetting.SYSTEM,
+                            "English" to LanguageSetting.ENGLISH,
+                            "Русский" to LanguageSetting.RUSSIAN,
+                        ),
+                        selected = language,
+                        onSelect = viewModel::setLanguage,
+                    )
+                }
+            }
+            item { HorizontalDivider(color = NitronTheme.colors.border) }
+            item {
+                Text(
+                    strings.workspace,
                     style = MaterialTheme.typography.titleLarge,
                     color = NitronTheme.colors.textPrimary,
                 )
@@ -182,7 +250,7 @@ fun SettingsScreen(
 
     if (prefill != null || editingProvider != null) {
         val template = prefill
-        ProviderEditorDialog(
+        ProviderEditorSheet(
             initial = editingProvider,
             prefillName = template?.name.orEmpty(),
             prefillProtocol = template?.protocol ?: ProviderProtocol.OPENAI_COMPATIBLE,
@@ -207,6 +275,48 @@ fun SettingsScreen(
     }
 }
 
+/** OpenAI/Vercel-style segmented control: pill row with an animated selection accent. */
+@Composable
+private fun <T> SegmentedSelector(
+    options: List<Pair<String, T>>,
+    selected: T,
+    onSelect: (T) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier
+            .fillMaxWidth()
+            .nitronSurface(SurfaceLevel.Muted, NitronTheme.shapes.small)
+            .padding(3.dp),
+        horizontalArrangement = Arrangement.spacedBy(3.dp),
+    ) {
+        options.forEach { (label, value) ->
+            val isSelected = value == selected
+            Text(
+                label,
+                style = MaterialTheme.typography.labelMedium,
+                color = if (isSelected) NitronTheme.colors.onPrimary else NitronTheme.colors.textSecondary,
+                maxLines = 1,
+                textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .weight(1f)
+                    .then(
+                        if (isSelected) {
+                            Modifier.background(
+                                color = NitronTheme.colors.primary,
+                                shape = NitronTheme.shapes.small,
+                            )
+                        } else {
+                            Modifier
+                        },
+                    )
+                    .pressableRipple(shape = NitronTheme.shapes.small) { onSelect(value) }
+                    .padding(vertical = 8.dp),
+            )
+        }
+    }
+}
+
 @Composable
 private fun ProviderCard(
     profile: ProviderProfile,
@@ -214,6 +324,7 @@ private fun ProviderCard(
     models: List<com.nitronbox.app.data.remote.DiscoveredModel>,
     onEdit: () -> Unit,
 ) {
+    val strings = LocalStrings.current
     Column(
         Modifier
             .fillMaxWidth()
@@ -225,7 +336,7 @@ private fun ProviderCard(
             Column(Modifier.weight(1f)) {
                 Text(profile.displayName, style = MaterialTheme.typography.titleSmall, color = NitronTheme.colors.textPrimary)
                 Text(
-                    "${profile.protocol.name.lowercase().replace('_', ' ')}  ·  ${profile.baseUrl}",
+                    "${profile.protocol.friendlyName()}  ·  ${profile.baseUrl}",
                     style = MaterialTheme.typography.labelSmall,
                     color = NitronTheme.colors.textSecondary,
                     maxLines = 1,
@@ -233,115 +344,101 @@ private fun ProviderCard(
                 )
             }
             when {
-                health?.reachable == true -> Text("Online", style = MaterialTheme.typography.labelMedium, color = NitronTheme.colors.accent)
-                health?.reachable == false -> Text("Offline", style = MaterialTheme.typography.labelMedium, color = NitronTheme.colors.destructive)
-                else -> Text("Untested", style = MaterialTheme.typography.labelMedium, color = NitronTheme.colors.textTertiary)
+                health?.reachable == true -> Text(strings.online, style = MaterialTheme.typography.labelMedium, color = NitronTheme.colors.accent)
+                health?.reachable == false -> Text(strings.offline, style = MaterialTheme.typography.labelMedium, color = NitronTheme.colors.destructive)
+                else -> Text(strings.untested, style = MaterialTheme.typography.labelMedium, color = NitronTheme.colors.textTertiary)
             }
         }
-        if (models.isNotEmpty()) {
-            Spacer(Modifier.height(8.dp))
-            Text(
-                "${models.size} models discovered",
-                style = MaterialTheme.typography.labelSmall,
-                color = NitronTheme.colors.textTertiary,
-            )
+        AnimatedVisibility(models.isNotEmpty()) {
+            Column {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    strings.modelsDiscovered(models.size),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = NitronTheme.colors.textTertiary,
+                )
+            }
         }
     }
 }
 
+/** Provider editor as a custom bottom sheet: protocol chips, credentials, health check. */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ProviderEditorDialog(
+private fun ProviderEditorSheet(
     initial: ProviderProfile?,
-    prefillName: String = "",
-    prefillProtocol: ProviderProtocol = ProviderProtocol.OPENAI_COMPATIBLE,
-    prefillBaseUrl: String = "https://",
+    prefillName: String,
+    prefillProtocol: ProviderProtocol,
+    prefillBaseUrl: String,
     onDismiss: () -> Unit,
     onSave: (ProviderProfile, CharArray?) -> Unit,
     onTest: (String) -> Unit,
     onDiscover: (String) -> Unit,
     onDelete: (String) -> Unit,
 ) {
+    val strings = LocalStrings.current
     var displayName by remember { mutableStateOf(initial?.displayName ?: prefillName) }
     var baseUrl by remember { mutableStateOf(initial?.baseUrl ?: prefillBaseUrl) }
     var protocol by remember { mutableStateOf(initial?.protocol ?: prefillProtocol) }
     var apiKey by remember { mutableStateOf("") }
-    var protocolMenuOpen by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
 
     val valid = displayName.isNotBlank() && baseUrl.startsWith("http")
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(if (initial == null) "Add provider" else "Edit provider") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Box {
-                    OutlinedTextField(
-                        value = protocol.name,
-                        onValueChange = {},
-                        readOnly = true,
-                        label = { Text("Protocol") },
-                        trailingIcon = {
-                            IconButton(onClick = { protocolMenuOpen = true }) {
-                                Icon(
-                                    if (protocolMenuOpen) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
-                                    "Protocol",
-                                    tint = NitronTheme.colors.textSecondary,
-                                )
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    DropdownMenu(expanded = protocolMenuOpen, onDismissRequest = { protocolMenuOpen = false }) {
-                        ProviderProtocol.entries.forEach { entry ->
-                            DropdownMenuItem(
-                                text = { Text(entry.name) },
-                                onClick = {
-                                    protocol = entry
-                                    protocolMenuOpen = false
-                                },
-                            )
-                        }
-                    }
-                }
-                OutlinedTextField(
-                    value = displayName,
-                    onValueChange = { displayName = it },
-                    label = { Text("Display name") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                OutlinedTextField(
-                    value = baseUrl,
-                    onValueChange = { baseUrl = it },
-                    label = { Text("Base URL") },
-                    supportingText = { Text("HTTPS required; loopback allowed for local models") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                OutlinedTextField(
-                    value = apiKey,
-                    onValueChange = { apiKey = it },
-                    label = { Text(if (initial == null) "API key" else "API key (leave blank to keep)") },
-                    visualTransformation = PasswordVisualTransformation(),
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(
-                        onClick = { initial?.let { onTest(it.id) } },
-                        enabled = initial != null,
-                    ) { Text("Test") }
-                    OutlinedButton(
-                        onClick = { initial?.let { onDiscover(it.id) } },
-                        enabled = initial != null,
-                    ) { Text("Load models") }
-                }
+    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = NitronTheme.colors.background) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(
+                if (initial == null) strings.addProvider else initial.displayName,
+                style = MaterialTheme.typography.headlineSmall,
+                color = NitronTheme.colors.textPrimary,
+            )
+            Text(strings.protocol, style = MaterialTheme.typography.labelLarge, color = NitronTheme.colors.textSecondary)
+            SegmentedSelector(
+                options = ProviderProtocol.entries.map { it.friendlyName() to it },
+                selected = protocol,
+                onSelect = { protocol = it },
+            )
+            OutlinedTextField(
+                value = displayName,
+                onValueChange = { displayName = it },
+                label = { Text(strings.providerName) },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            OutlinedTextField(
+                value = baseUrl,
+                onValueChange = { baseUrl = it },
+                label = { Text(strings.baseUrl) },
+                supportingText = { Text(strings.baseUrlHint) },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            OutlinedTextField(
+                value = apiKey,
+                onValueChange = { apiKey = it },
+                label = { Text(if (initial == null) strings.apiKey else strings.apiKeyKeep) },
+                visualTransformation = PasswordVisualTransformation(),
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(
+                    onClick = { initial?.let { onTest(it.id) } },
+                    enabled = initial != null,
+                ) { Text(strings.test) }
+                OutlinedButton(
+                    onClick = { initial?.let { onDiscover(it.id) } },
+                    enabled = initial != null,
+                ) { Text(strings.loadModels) }
             }
-        },
-        confirmButton = {
-            TextButton(
-                enabled = valid,
+            Button(
                 onClick = {
                     val id = initial?.id ?: "provider-${System.currentTimeMillis()}"
                     val profile = ProviderProfile(
@@ -355,33 +452,33 @@ private fun ProviderEditorDialog(
                     onSave(profile, key)
                     apiKey = ""
                 },
-            ) { Text("Save") }
-        },
-        dismissButton = {
-            Row {
-                if (initial != null) {
-                    TextButton(onClick = { confirmDelete = true }) {
-                        Text("Delete", color = NitronTheme.colors.destructive)
-                    }
+                enabled = valid,
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text(strings.save) }
+            if (initial != null) {
+                TextButton(
+                    onClick = { confirmDelete = true },
+                    modifier = Modifier.align(Alignment.CenterHorizontally),
+                ) {
+                    Text(strings.delete, color = NitronTheme.colors.destructive)
                 }
-                TextButton(onClick = onDismiss) { Text("Close") }
             }
-        },
-    )
+        }
+    }
 
     if (confirmDelete) {
         initial?.let { profile ->
             AlertDialog(
                 onDismissRequest = { confirmDelete = false },
-                title = { Text("Delete provider?") },
-                text = { Text("“${profile.displayName}” and its stored key will be removed.") },
+                title = { Text(strings.delete) },
+                text = { Text(profile.displayName) },
                 confirmButton = {
                     TextButton(onClick = {
                         onDelete(profile.id)
                         confirmDelete = false
-                    }) { Text("Delete", color = NitronTheme.colors.destructive) }
+                    }) { Text(strings.delete, color = NitronTheme.colors.destructive) }
                 },
-                dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Cancel") } },
+                dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text(strings.cancel) } },
             )
         }
     }
@@ -392,6 +489,7 @@ private fun WorkspaceEditor(
     workspace: com.nitronbox.app.data.model.Workspace,
     onSave: (com.nitronbox.app.data.model.Workspace) -> Unit,
 ) {
+    val strings = LocalStrings.current
     var name by remember(workspace.id) { mutableStateOf(workspace.name) }
     var systemPrompt by remember(workspace.id) { mutableStateOf(workspace.systemPrompt) }
     var temperature by remember(workspace.id) { mutableStateOf(workspace.generation.temperature) }
@@ -411,40 +509,40 @@ private fun WorkspaceEditor(
         OutlinedTextField(
             value = name,
             onValueChange = { name = it },
-            label = { Text("Name") },
+            label = { Text(strings.workspaceName) },
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
         )
         OutlinedTextField(
             value = systemPrompt,
             onValueChange = { systemPrompt = it },
-            label = { Text("System prompt") },
+            label = { Text(strings.systemPrompt) },
             minLines = 3,
             modifier = Modifier.fillMaxWidth(),
         )
-        Text("Temperature: ${"%.2f".format(temperature)}", style = MaterialTheme.typography.labelMedium, color = NitronTheme.colors.textSecondary)
+        Text(strings.temperature(temperature), style = MaterialTheme.typography.labelMedium, color = NitronTheme.colors.textSecondary)
         Slider(value = temperature, onValueChange = { temperature = it }, valueRange = 0f..2f)
         OutlinedTextField(
             value = maxOutputTokens,
             onValueChange = { maxOutputTokens = it.filter(Char::isDigit) },
-            label = { Text("Max output tokens") },
+            label = { Text(strings.maxOutputTokens) },
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
         )
         HorizontalDivider(color = NitronTheme.colors.border)
-        Text("Context window", style = MaterialTheme.typography.titleSmall, color = NitronTheme.colors.textPrimary)
+        Text(strings.contextWindow, style = MaterialTheme.typography.titleSmall, color = NitronTheme.colors.textPrimary)
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             OutlinedTextField(
                 value = maxInputTokens,
                 onValueChange = { maxInputTokens = it.filter(Char::isDigit) },
-                label = { Text("Max input") },
+                label = { Text(strings.maxInput) },
                 singleLine = true,
                 modifier = Modifier.weight(1f),
             )
             OutlinedTextField(
                 value = reservedOutput,
                 onValueChange = { reservedOutput = it.filter(Char::isDigit) },
-                label = { Text("Reserve out") },
+                label = { Text(strings.reserveOutput) },
                 singleLine = true,
                 modifier = Modifier.weight(1f),
             )
@@ -454,14 +552,10 @@ private fun WorkspaceEditor(
                 value = strategy.name.lowercase().replace('_', ' '),
                 onValueChange = {},
                 readOnly = true,
-                label = { Text("Overflow strategy") },
+                label = { Text(strings.overflowStrategy) },
                 trailingIcon = {
                     IconButton(onClick = { strategyMenuOpen = true }) {
-                        Icon(
-                            if (strategyMenuOpen) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
-                            "Strategy",
-                            tint = NitronTheme.colors.textSecondary,
-                        )
+                        Icon(Icons.Rounded.ExpandMore, null, tint = NitronTheme.colors.textSecondary)
                     }
                 },
                 modifier = Modifier.fillMaxWidth(),
@@ -498,6 +592,6 @@ private fun WorkspaceEditor(
                 )
             },
             modifier = Modifier.align(Alignment.End),
-        ) { Text("Save workspace") }
+        ) { Text(strings.saveWorkspace) }
     }
 }

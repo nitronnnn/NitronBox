@@ -105,6 +105,10 @@ interface NitronBoxDao {
     @Query("UPDATE conversations SET summary = :summary, summaryThroughEpochMillis = :through, updatedAtEpochMillis = :now WHERE id = :conversationId")
     suspend fun updateSummary(conversationId: String, summary: String, through: Long, now: Long)
 
+    /** Cheap live estimate of conversation size in characters, for the context-usage indicator. */
+    @Query("SELECT COALESCE(SUM(LENGTH(content)), 0) FROM messages WHERE conversationId = :conversationId")
+    fun observeContextChars(conversationId: String): Flow<Long>
+
     @Transaction
     suspend fun insertMessageGraph(message: MessageEntity, attachments: List<AttachmentEntity>) {
         insertMessage(message)

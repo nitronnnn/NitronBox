@@ -4,14 +4,22 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.nitronbox.app.data.model.ThemeMode
+import com.nitronbox.app.data.model.WorkspaceTheme
+import com.nitronbox.app.data.settings.ThemeModeSetting
 import com.nitronbox.app.ui.AppViewModelFactory
 import com.nitronbox.app.ui.chat.ChatScreen
 import com.nitronbox.app.ui.chat.ChatSessionViewModel
+import com.nitronbox.app.ui.i18n.LocalStrings
+import com.nitronbox.app.ui.i18n.stringsFor
 import com.nitronbox.app.ui.settings.SettingsScreen
 import com.nitronbox.app.ui.settings.SettingsViewModel
 import com.nitronbox.app.ui.theme.NitronBoxTheme
@@ -20,29 +28,44 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        val factory = AppViewModelFactory((application as NitronBoxApplication).container)
+        val container = (application as NitronBoxApplication).container
+        val factory = AppViewModelFactory(container)
         setContent {
-            NitronBoxTheme {
-                val navController = rememberNavController()
-                NavHost(navController, startDestination = Routes.CHAT, modifier = Modifier) {
-                    composable(Routes.CHAT) {
-                        val chatViewModel: ChatSessionViewModel = viewModel(factory = factory)
-                        ChatScreen(
-                            viewModel = chatViewModel,
-                            onOpenSettings = { navController.navigate(Routes.SETTINGS) },
-                        )
-                    }
-                    composable(Routes.SETTINGS) {
-                        val settingsViewModel: SettingsViewModel = viewModel(factory = factory)
-                        SettingsScreen(
-                            viewModel = settingsViewModel,
-                            onBack = { navController.popBackStack() },
-                        )
+            val themeMode by container.appSettings.themeMode.collectAsState(ThemeModeSetting.SYSTEM)
+            val language by container.appSettings.language.collectAsState(com.nitronbox.app.data.settings.LanguageSetting.SYSTEM)
+            val strings = remember(language) { stringsFor(language) }
+
+            androidx.compose.runtime.CompositionLocalProvider(LocalStrings provides strings) {
+                NitronBoxTheme(
+                    workspaceTheme = WorkspaceTheme(mode = themeMode.toDomain()),
+                ) {
+                    val navController = rememberNavController()
+                    NavHost(navController, startDestination = Routes.CHAT, modifier = Modifier) {
+                        composable(Routes.CHAT) {
+                            val chatViewModel: ChatSessionViewModel = viewModel(factory = factory)
+                            ChatScreen(
+                                viewModel = chatViewModel,
+                                onOpenSettings = { navController.navigate(Routes.SETTINGS) },
+                            )
+                        }
+                        composable(Routes.SETTINGS) {
+                            val settingsViewModel: SettingsViewModel = viewModel(factory = factory)
+                            SettingsScreen(
+                                viewModel = settingsViewModel,
+                                onBack = { navController.popBackStack() },
+                            )
+                        }
                     }
                 }
             }
         }
     }
+}
+
+private fun ThemeModeSetting.toDomain(): ThemeMode = when (this) {
+    ThemeModeSetting.SYSTEM -> ThemeMode.SYSTEM
+    ThemeModeSetting.LIGHT -> ThemeMode.LIGHT
+    ThemeModeSetting.DARK -> ThemeMode.DARK
 }
 
 private object Routes {

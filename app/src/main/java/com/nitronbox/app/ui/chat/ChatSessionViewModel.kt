@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.paging.PagingData
 import androidx.paging.cachedIn
 import com.nitronbox.app.AppContainer
+import com.nitronbox.app.data.local.ChatRepository
 import com.nitronbox.app.data.local.ConversationEntity
 import com.nitronbox.app.data.model.AttachmentReference
 import com.nitronbox.app.data.model.ChatMessage
@@ -39,6 +40,7 @@ class ChatSessionViewModel(private val container: AppContainer) : ViewModel() {
     private val repository = container.chatRepository
     private val service = container.chatService
     private val settings = container.appSettings
+    private val catalogStore = container.modelCatalogStore
 
     val workspaces: StateFlow<List<Workspace>> = repository.observeWorkspaces()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
@@ -68,11 +70,26 @@ class ChatSessionViewModel(private val container: AppContainer) : ViewModel() {
         repository.observeProviderProfiles()
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    /** Shared across the app, so models discovered in Settings appear here immediately. */
+    val discoveredModels: StateFlow<Map<String, List<DiscoveredModel>>> = catalogStore.models
+
     val messages: kotlinx.coroutines.flow.Flow<PagingData<ChatMessage>> = settings.activeConversationId
         .flatMapLatest { id ->
             id?.let { repository.messages(it) } ?: flowOf<PagingData<ChatMessage>>(PagingData.empty())
         }
         .cachedIn(viewModelScope)
+
+    /** Rough fill level of the context window for the current conversation (0f..1f). */
+    val contextUsage: StateFlow<Float> = combine(
+        activeWorkspace,
+        settings.activeConversationId.flatMapLatest { id ->
+            id?.let { container.dao.observeContextChars(it) } ?: flowOf(0L)
+        },
+    ) { workspace, chars ->
+        val policy = workspace?.contextPolicy ?: return@combine 0f
+        val budget = (policy.maxInputTokens - policy.reservedOutputTokens).coerceAtLeast(1)
+        ((chars / CHARS_PER_TOKEN_ESTIMATE) / budget).toFloat().coerceIn(0f, 1f)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0f)
 
     private val _isStreaming = MutableStateFlow(false)
     val isStreaming: StateFlow<Boolean> = _isStreaming.asStateFlow()
@@ -89,10 +106,6 @@ class ChatSessionViewModel(private val container: AppContainer) : ViewModel() {
     private val registryFlow: StateFlow<ProviderRegistry?> = repository.observeProviderProfiles()
         .map { profiles -> container.providerRegistryFactory.create(profiles) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
-
-    /** Discovered models per provider id, shared between the model picker and settings. */
-    private val _discoveredModels = MutableStateFlow<Map<String, List<DiscoveredModel>>>(emptyMap())
-    val discoveredModels: StateFlow<Map<String, List<DiscoveredModel>>> = _discoveredModels.asStateFlow()
 
     private var generationJob: Job? = null
 
@@ -142,7 +155,7 @@ class ChatSessionViewModel(private val container: AppContainer) : ViewModel() {
         val attachments = _pendingAttachments.value
         _draft.value = ""
         _pendingAttachments.value = emptyList()
-        val conversationId = activeConversationId()
+        val conversationId = activeConversation.value?.id
         generationJob = viewModelScope.launch {
             try {
                 val prepared = service.prepareUserMessage(workspace, conversationId, text, attachments)
@@ -196,12 +209,21 @@ class ChatSessionViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
 
+    fun deleteMessage(messageId: String) {
+        viewModelScope.launch { repository.deleteMessage(messageId) }
+    }
+
     private fun activeConversationId(): String? = activeConversation.value?.id
 
     // --- Conversations ---
 
+    /** Creates the conversation right away so it appears in the drawer immediately. */
     fun newConversation() {
-        viewModelScope.launch { settings.setActiveConversation(null) }
+        viewModelScope.launch {
+            val workspace = activeWorkspace.value ?: return@launch
+            val conversation = repository.createConversation(workspace.id, ChatRepository.DEFAULT_TITLE)
+            settings.setActiveConversation(conversation.id)
+        }
     }
 
     fun selectConversation(id: String) {
@@ -257,30 +279,18 @@ class ChatSessionViewModel(private val container: AppContainer) : ViewModel() {
 
     fun refreshModels(providerId: String) {
         viewModelScope.launch {
-            runCatching {
-                val profile = repository.providerProfile(providerId)
-                    ?: throw IllegalStateException("Provider is missing")
-                container.providerRegistryFactory.create(listOf(profile))
-                    .require(providerId)
-                    .discoverModels(forceRefresh = true)
-            }.onSuccess { models ->
-                _discoveredModels.value = _discoveredModels.value + (providerId to models)
-            }.onFailure { emit("Model discovery failed: ${it.message}") }
+            val models = catalogStore.refresh(providerId)
+            if (models == null) emit("Model discovery failed. Check the provider settings.")
         }
     }
 
-    /** Loads catalogs for every configured provider that has none yet (used by the model picker). */
     fun refreshAllModels() {
         viewModelScope.launch {
             repository.providerProfiles().forEach { profile ->
-                if (_discoveredModels.value[profile.id] == null) {
-                    refreshModels(profile.id)
-                }
+                if (!catalogStore.hasCatalog(profile.id)) refreshModels(profile.id)
             }
         }
     }
-
-    fun modelsFor(providerId: String): List<DiscoveredModel> = _discoveredModels.value[providerId].orEmpty()
 
     private fun emit(message: String) {
         _events.tryEmit(message)
@@ -289,5 +299,6 @@ class ChatSessionViewModel(private val container: AppContainer) : ViewModel() {
     private companion object {
         const val UNCONFIGURED_PROVIDER = "unconfigured"
         const val UNCONFIGURED_MODEL = "unconfigured"
+        const val CHARS_PER_TOKEN_ESTIMATE = 3.0
     }
 }

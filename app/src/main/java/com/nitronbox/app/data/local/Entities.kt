@@ -68,6 +68,7 @@ data class MessageEntity(
     val inputTokens: Int? = null,
     val outputTokens: Int? = null,
     val errorText: String? = null,
+    val generationDurationMillis: Long? = null,
 )
 
 @Entity(

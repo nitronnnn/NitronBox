@@ -34,8 +34,9 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
         ) { id, list -> list.firstOrNull { it.id == id } ?: list.firstOrNull() }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
-    private val _discoveredModels = MutableStateFlow<Map<String, List<DiscoveredModel>>>(emptyMap())
-    val discoveredModels: StateFlow<Map<String, List<DiscoveredModel>>> = _discoveredModels.asStateFlow()
+    /** Shared with the chat model picker so discoveries are visible app-wide immediately. */
+    val discoveredModels: StateFlow<Map<String, List<DiscoveredModel>>> =
+        container.modelCatalogStore.models
 
     private val _providerHealth = MutableStateFlow<Map<String, ProviderHealth>>(emptyMap())
     val providerHealth: StateFlow<Map<String, ProviderHealth>> = _providerHealth.asStateFlow()
@@ -46,20 +47,42 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
     private val _busy = MutableStateFlow(false)
     val busy: StateFlow<Boolean> = _busy.asStateFlow()
 
+    val themeMode: StateFlow<com.nitronbox.app.data.settings.ThemeModeSetting> =
+        container.appSettings.themeMode
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), com.nitronbox.app.data.settings.ThemeModeSetting.SYSTEM)
+
+    val language: StateFlow<com.nitronbox.app.data.settings.LanguageSetting> =
+        container.appSettings.language
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), com.nitronbox.app.data.settings.LanguageSetting.SYSTEM)
+
+    fun setThemeMode(mode: com.nitronbox.app.data.settings.ThemeModeSetting) {
+        viewModelScope.launch { container.appSettings.setThemeMode(mode) }
+    }
+
+    fun setLanguage(language: com.nitronbox.app.data.settings.LanguageSetting) {
+        viewModelScope.launch { container.appSettings.setLanguage(language) }
+    }
+
     fun saveProvider(profile: ProviderProfile, apiKey: CharArray?) {
         viewModelScope.launch {
             runCatching {
-                repository.saveProviderProfile(profile)
+                var saved = profile
+                repository.saveProviderProfile(saved)
                 if (apiKey != null && apiKey.isNotEmpty()) {
                     val alias = credentialAlias(profile.id)
                     credentialStore.put(alias, apiKey)
                     // Persist the profile with its alias after the key is safely stored.
                     if (profile.credentialAlias != alias) {
-                        repository.saveProviderProfile(profile.copy(credentialAlias = alias))
+                        saved = profile.copy(credentialAlias = alias)
+                        repository.saveProviderProfile(saved)
                     }
                 }
-            }.onSuccess { emit("Provider saved") }
-                .onFailure { emit(it.message ?: "Unable to save provider") }
+                saved
+            }.onSuccess { saved ->
+                emit("Provider saved")
+                // Warm the shared catalog so the model picker is ready right away.
+                container.modelCatalogStore.refresh(saved.id)
+            }.onFailure { emit(it.message ?: "Unable to save provider") }
         }
     }
 
@@ -67,7 +90,7 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
         viewModelScope.launch {
             repository.deleteProviderProfile(profileId)
             credentialStore.delete(credentialAlias(profileId))
-            _discoveredModels.value = _discoveredModels.value - profileId
+            container.modelCatalogStore.forget(profileId)
             _providerHealth.value = _providerHealth.value - profileId
             emit("Provider removed")
         }
@@ -94,12 +117,12 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
         viewModelScope.launch {
             _busy.value = true
             try {
-                val bridge = bridgeFor(profileId) ?: return@launch
-                val models = bridge.discoverModels(forceRefresh = true)
-                _discoveredModels.value = _discoveredModels.value + (profileId to models)
-                emit("Loaded ${models.size} models")
-            } catch (failure: Exception) {
-                emit("Model discovery failed: ${failure.message}")
+                val models = container.modelCatalogStore.refresh(profileId)
+                if (models != null) {
+                    emit("Loaded ${models.size} models")
+                } else {
+                    emit("Model discovery failed. Check the endpoint and API key.")
+                }
             } finally {
                 _busy.value = false
             }

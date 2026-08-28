@@ -7,16 +7,24 @@ import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -41,7 +49,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.ArrowUpward
 import androidx.compose.material.icons.rounded.AttachFile
+import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.Menu
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Refresh
@@ -49,7 +60,6 @@ import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Stop
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -64,6 +74,7 @@ import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -71,7 +82,10 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -83,6 +97,7 @@ import com.nitronbox.app.data.model.MessageStatus
 import com.nitronbox.app.ui.components.ConversationsPanel
 import com.nitronbox.app.ui.components.ModelPickerSheet
 import com.nitronbox.app.ui.chat.components.MarkdownRenderer
+import com.nitronbox.app.ui.i18n.LocalStrings
 import com.nitronbox.app.ui.theme.NitronBackground
 import com.nitronbox.app.ui.theme.NitronTheme
 import com.nitronbox.app.ui.theme.SurfaceLevel
@@ -97,12 +112,14 @@ fun ChatScreen(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
+    val strings = LocalStrings.current
     val workspace by viewModel.activeWorkspace.collectAsState()
     val conversation by viewModel.activeConversation.collectAsState()
     val model by viewModel.activeModel.collectAsState()
     val draft by viewModel.draft.collectAsState()
     val streaming by viewModel.isStreaming.collectAsState()
     val pendingAttachments by viewModel.pendingAttachments.collectAsState()
+    val contextUsage by viewModel.contextUsage.collectAsState()
     val messages = viewModel.messages.collectAsLazyPagingItems()
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -112,18 +129,13 @@ fun ChatScreen(
 
     Scaffold(
         modifier = modifier,
-        // Inset handling is done explicitly by the header, list, and composer; a zero-inset
-        // scaffold prevents double navigation-bar padding while the composer rides the IME.
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         snackbarHost = {
-            SnackbarHost(
-                snackbarHostState,
-                modifier = Modifier.navigationBarsPadding(),
-            )
+            SnackbarHost(snackbarHostState, modifier = Modifier.navigationBarsPadding())
         },
         containerColor = Color.Transparent,
     ) { scaffoldPadding ->
-        val drawerState = rememberDrawerState(DrawerValue.Closed)
+        val drawerState = rememberDrawerState(initialValue = androidx.compose.material3.DrawerValue.Closed)
         val scope = rememberCoroutineScope()
         ModalNavigationDrawer(
             drawerState = drawerState,
@@ -134,92 +146,105 @@ fun ChatScreen(
                 )
             },
         ) {
+            var modelPickerOpen by remember { mutableStateOf(false) }
+            val openConversations: () -> Unit = { scope.launch { drawerState.open() } }
+
+            // Blur the chat behind the model sheet (RenderEffect on API 31+, no-op below).
+            val blurProgress by animateFloatAsState(
+                targetValue = if (modelPickerOpen) 1f else 0f,
+                label = "blurProgress",
+            )
+            val blurModifier = Modifier.blur(18.dp * blurProgress)
             NitronBackground(Modifier.padding(scaffoldPadding)) {
-                var modelPickerOpen by remember { mutableStateOf(false) }
-                val openConversations: () -> Unit = { scope.launch { drawerState.open() } }
+                NitronBackground(Modifier.fillMaxSize().then(blurModifier)) {
+                    Column(Modifier.fillMaxSize()) {
+                        val statusTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
 
-            val statusTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
-            val navigationBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-            val imeBottom = WindowInsets.ime.asPaddingValues().calculateBottomPadding()
+                    ChatHeader(
+                        title = conversation?.title ?: workspace?.name ?: "NitronBox",
+                        modelLabel = model?.displayName ?: strings.noModelSelected,
+                        onOpenConversations = openConversations,
+                        onOpenModelPicker = { modelPickerOpen = true },
+                        onNewConversation = viewModel::newConversation,
+                        onOpenSettings = onOpenSettings,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = statusTop + 6.dp, start = 14.dp, end = 14.dp),
+                    )
 
-            val listState = rememberLazyListState()
-            LaunchedEffect(messages.itemCount) {
-                if (messages.itemCount > 0) listState.scrollToItem(0)
-            }
+                    val listState = rememberLazyListState()
+                    LaunchedEffect(messages.itemCount) {
+                        if (messages.itemCount > 0) listState.scrollToItem(0)
+                    }
 
-            LazyColumn(
-                state = listState,
-                modifier = Modifier.fillMaxSize(),
-                reverseLayout = true,
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(
-                    start = 14.dp,
-                    end = 14.dp,
-                    top = statusTop + 72.dp,
-                    bottom = maxOf(navigationBottom, imeBottom) + 128.dp,
-                ),
-                verticalArrangement = Arrangement.spacedBy(14.dp),
-            ) {
-                if (messages.itemCount == 0) {
-                    item(key = "welcome") {
-                        WelcomeCard(
-                            workspaceName = workspace?.name ?: "NitronBox",
-                            modelConfigured = model != null,
-                            onConfigureModels = onOpenSettings,
-                        )
+                    LazyColumn(
+                        state = listState,
+                        modifier = Modifier.fillMaxSize(),
+                        reverseLayout = true,
+                        contentPadding = PaddingValues(
+                            start = 14.dp,
+                            end = 14.dp,
+                            top = 12.dp,
+                            bottom = 132.dp,
+                        ),
+                        verticalArrangement = Arrangement.spacedBy(14.dp),
+                    ) {
+                        if (messages.itemCount == 0) {
+                            item(key = "welcome") {
+                                WelcomeCard(
+                                    workspaceName = workspace?.name ?: "NitronBox",
+                                    modelConfigured = model != null,
+                                    onConfigureModels = onOpenSettings,
+                                )
+                            }
+                        }
+                        items(count = messages.itemCount, key = messages.itemKey(ChatMessage::id)) { index ->
+                            val message = messages[index] ?: return@items
+                            Box(Modifier.animateItem()) {
+                                MessageBubble(
+                                    message = message,
+                                    onRegenerate = { viewModel.regenerate(message.id) },
+                                    onDelete = { viewModel.deleteMessage(message.id) },
+                                    onCopy = { content ->
+                                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                        clipboard.setPrimaryClip(ClipData.newPlainText("message", content))
+                                    },
+                                )
+                            }
+                        }
+                    }
                     }
                 }
-                items(count = messages.itemCount, key = messages.itemKey(ChatMessage::id)) { index ->
-                    val message = messages[index] ?: return@items
-                    MessageBubble(
-                        message = message,
-                        streaming = streaming,
-                        onRegenerate = { viewModel.regenerate(message.id) },
-                        onCopy = { content ->
-                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                            clipboard.setPrimaryClip(ClipData.newPlainText("message", content))
+
+                Composer(
+                    draft = draft,
+                    pendingAttachments = pendingAttachments,
+                    streaming = streaming,
+                    modelLabel = model?.displayName ?: strings.noModelSelected,
+                    contextUsage = contextUsage,
+                    onDraftChange = viewModel::onDraftChange,
+                    onSend = viewModel::send,
+                    onStop = viewModel::stopGeneration,
+                    onPickAttachments = viewModel::addAttachments,
+                    onRemoveAttachment = viewModel::removeAttachment,
+                    onOpenModelPicker = { modelPickerOpen = true },
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .navigationBarsPadding()
+                        .imePadding()
+                        .padding(start = 14.dp, end = 14.dp, bottom = 10.dp),
+                )
+
+                if (modelPickerOpen) {
+                    ModelPickerSheet(
+                        viewModel = viewModel,
+                        onDismiss = { modelPickerOpen = false },
+                        onOpenSettings = {
+                            modelPickerOpen = false
+                            onOpenSettings()
                         },
                     )
                 }
-            }
-
-            ChatHeader(
-                title = conversation?.title ?: workspace?.name ?: "NitronBox",
-                modelLabel = model?.displayName ?: "No model selected",
-                onOpenConversations = openConversations,
-                onOpenModelPicker = { modelPickerOpen = true },
-                onNewConversation = { viewModel.newConversation() },
-                onOpenSettings = onOpenSettings,
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(top = statusTop + 6.dp, start = 14.dp, end = 14.dp),
-            )
-
-            Composer(
-                draft = draft,
-                pendingAttachments = pendingAttachments,
-                streaming = streaming,
-                onDraftChange = viewModel::onDraftChange,
-                onSend = viewModel::send,
-                onStop = viewModel::stopGeneration,
-                onPickAttachments = viewModel::addAttachments,
-                onRemoveAttachment = viewModel::removeAttachment,
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .navigationBarsPadding()
-                    .imePadding()
-                    .padding(start = 14.dp, end = 14.dp, bottom = 10.dp),
-            )
-
-            if (modelPickerOpen) {
-                ModelPickerSheet(
-                    viewModel = viewModel,
-                    onDismiss = { modelPickerOpen = false },
-                    onOpenSettings = {
-                        modelPickerOpen = false
-                        onOpenSettings()
-                    },
-                )
-            }
             }
         }
     }
@@ -235,15 +260,15 @@ private fun ChatHeader(
     onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val strings = LocalStrings.current
     Row(
         modifier
-            .fillMaxWidth()
             .nitronSurface(SurfaceLevel.Overlay, NitronTheme.shapes.large)
             .padding(horizontal = 6.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         IconButton(onOpenConversations) {
-            Icon(Icons.Rounded.Menu, "Conversations", tint = NitronTheme.colors.textPrimary)
+            Icon(Icons.Rounded.Menu, strings.conversations, tint = NitronTheme.colors.textPrimary)
         }
         Column(
             Modifier
@@ -267,10 +292,10 @@ private fun ChatHeader(
             )
         }
         IconButton(onNewConversation) {
-            Icon(Icons.Rounded.Add, "New conversation", tint = NitronTheme.colors.textPrimary)
+            Icon(Icons.Rounded.Add, strings.newConversation, tint = NitronTheme.colors.textPrimary)
         }
         IconButton(onOpenSettings) {
-            Icon(Icons.Rounded.Settings, "Settings", tint = NitronTheme.colors.textPrimary)
+            Icon(Icons.Rounded.Settings, strings.settings, tint = NitronTheme.colors.textPrimary)
         }
     }
 }
@@ -281,33 +306,36 @@ private fun WelcomeCard(
     modelConfigured: Boolean,
     onConfigureModels: () -> Unit,
 ) {
+    val strings = LocalStrings.current
     Column(
         Modifier
             .fillMaxWidth()
             .nitronSurface(SurfaceLevel.Raised, NitronTheme.shapes.large)
             .padding(20.dp),
     ) {
-        Text("What can we create?", style = MaterialTheme.typography.headlineMedium, color = NitronTheme.colors.textPrimary)
+        Text(strings.welcomeTitle, style = MaterialTheme.typography.headlineMedium, color = NitronTheme.colors.textPrimary)
         Spacer(Modifier.height(8.dp))
         Text(
-            "$workspaceName keeps every conversation isolated and routes requests through your preferred models.",
+            strings.welcomeBody(workspaceName),
             style = MaterialTheme.typography.bodyMedium,
             color = NitronTheme.colors.textSecondary,
         )
-        if (!modelConfigured) {
-            Spacer(Modifier.height(14.dp))
-            Text(
-                "No model is selected yet. Add a provider and pick a model to start chatting.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = NitronTheme.colors.textSecondary,
-            )
-            Spacer(Modifier.height(10.dp))
-            Text(
-                "Open Settings",
-                style = MaterialTheme.typography.labelLarge,
-                color = NitronTheme.colors.accent,
-                modifier = Modifier.pressableRipple(shape = NitronTheme.shapes.small, onClick = onConfigureModels),
-            )
+        AnimatedVisibility(!modelConfigured, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
+            Column {
+                Spacer(Modifier.height(14.dp))
+                Text(
+                    strings.welcomeNoModel,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = NitronTheme.colors.textSecondary,
+                )
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    strings.openSettings,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = NitronTheme.colors.accent,
+                    modifier = Modifier.pressableRipple(shape = NitronTheme.shapes.small, onClick = onConfigureModels),
+                )
+            }
         }
     }
 }
@@ -315,13 +343,19 @@ private fun WelcomeCard(
 @Composable
 private fun MessageBubble(
     message: ChatMessage,
-    streaming: Boolean,
     onRegenerate: () -> Unit,
+    onDelete: () -> Unit,
     onCopy: (String) -> Unit,
 ) {
+    val strings = LocalStrings.current
     val isUser = message.role == MessageRole.USER
     var actionsOpen by remember { mutableStateOf(false) }
     val context = LocalContext.current
+
+    fun copyText() {
+        onCopy(message.content)
+        android.widget.Toast.makeText(context, strings.copied, android.widget.Toast.LENGTH_SHORT).show()
+    }
 
     Row(
         Modifier.fillMaxWidth(),
@@ -340,16 +374,13 @@ private fun MessageBubble(
                 )
                 .combinedClickable(
                     onClick = {},
-                    onLongClick = {
-                        onCopy(message.content)
-                        android.widget.Toast.makeText(context, "Copied to clipboard", android.widget.Toast.LENGTH_SHORT).show()
-                    },
+                    onLongClick = { actionsOpen = true },
                 )
                 .padding(horizontal = 15.dp, vertical = 12.dp),
         ) {
             if (message.status == MessageStatus.FAILED) {
                 Text(
-                    "Generation failed",
+                    strings.generationFailed,
                     style = MaterialTheme.typography.labelMedium,
                     color = NitronTheme.colors.destructive,
                 )
@@ -359,7 +390,7 @@ private fun MessageBubble(
                 Text(message.content, style = MaterialTheme.typography.bodyLarge, color = NitronTheme.colors.textPrimary)
             } else {
                 if (message.content.isEmpty() && message.status == MessageStatus.STREAMING) {
-                    StreamingDots()
+                    StreamingDots(strings.thinking)
                 } else {
                     MarkdownRenderer(
                         markdown = message.content + if (message.status == MessageStatus.STREAMING) " ▍" else "",
@@ -374,58 +405,62 @@ private fun MessageBubble(
                     )
                 }
             }
-            message.attachments.forEach { attachment ->
+            AnimatedVisibility(message.attachments.isNotEmpty()) {
+                Column {
+                    message.attachments.forEach { attachment ->
+                        Spacer(Modifier.height(6.dp))
+                        AttachmentChip(attachment.displayName, attachment.byteSize, onRemove = null)
+                    }
+                }
+            }
+            MessageStats(message)
+            if (message.status == MessageStatus.FAILED && message.errorText != null) {
                 Spacer(Modifier.height(6.dp))
-                AttachmentChip(attachment.displayName, attachment.byteSize, onRemove = null)
+                Text(
+                    message.errorText,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = NitronTheme.colors.textSecondary,
+                )
             }
-            when {
-                message.status == MessageStatus.FAILED && message.errorText != null -> {
-                    Spacer(Modifier.height(6.dp))
-                    Text(
-                        message.errorText,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = NitronTheme.colors.textSecondary,
-                    )
-                }
-                message.outputTokens != null && !isUser -> {
-                    Spacer(Modifier.height(6.dp))
-                    Text(
-                        listOfNotNull(message.modelId, "${message.outputTokens} tok")
-                            .joinToString("  ·  "),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = NitronTheme.colors.textTertiary,
-                    )
-                }
-            }
-            if (!isUser && message.status != MessageStatus.STREAMING) {
-                Box(contentAlignment = Alignment.CenterEnd) {
+            if (message.status != MessageStatus.STREAMING) {
+                Box(contentAlignment = if (isUser) Alignment.BottomStart else Alignment.BottomEnd) {
                     DropdownMenu(expanded = actionsOpen, onDismissRequest = { actionsOpen = false }) {
                         DropdownMenuItem(
-                            text = { Text("Copy text") },
+                            text = { Text(strings.copyText) },
                             onClick = {
                                 actionsOpen = false
-                                onCopy(message.content)
-                                android.widget.Toast.makeText(context, "Copied to clipboard", android.widget.Toast.LENGTH_SHORT).show()
+                                copyText()
                             },
                         )
+                        if (!isUser) {
+                            DropdownMenuItem(
+                                text = { Text(if (message.status == MessageStatus.FAILED) strings.retry else strings.regenerate) },
+                                onClick = {
+                                    actionsOpen = false
+                                    onRegenerate()
+                                },
+                            )
+                        }
                         DropdownMenuItem(
-                            text = { Text(if (message.status == MessageStatus.FAILED) "Retry" else "Regenerate") },
+                            text = { Text(strings.deleteMessage, color = NitronTheme.colors.destructive) },
                             onClick = {
                                 actionsOpen = false
-                                onRegenerate()
+                                onDelete()
                             },
                         )
                     }
-                    IconButton(
-                        onClick = { actionsOpen = true },
-                        modifier = Modifier.size(34.dp),
-                    ) {
-                        Icon(
-                            Icons.Rounded.MoreVert,
-                            "Message actions",
-                            tint = NitronTheme.colors.textTertiary,
-                            modifier = Modifier.size(17.dp),
-                        )
+                    if (!isUser) {
+                        IconButton(
+                            onClick = { actionsOpen = true },
+                            modifier = Modifier.size(32.dp),
+                        ) {
+                            Icon(
+                                Icons.Rounded.MoreVert,
+                                strings.conversationActions,
+                                tint = NitronTheme.colors.textTertiary,
+                                modifier = Modifier.size(16.dp),
+                            )
+                        }
                     }
                 }
             }
@@ -433,8 +468,32 @@ private fun MessageBubble(
     }
 }
 
+/** tok/s, response time and token counts, when the provider reported them. */
 @Composable
-private fun StreamingDots() {
+private fun MessageStats(message: ChatMessage) {
+    if (message.status != MessageStatus.COMPLETE) return
+    val durationSeconds = message.generationDurationMillis?.let { it / 1_000.0 }
+    if (durationSeconds == null) return
+    val parts = buildList {
+        val tokens = message.outputTokens
+        if (tokens != null && tokens > 0 && durationSeconds > 0.05) {
+            add("%.1f tok/s".format(tokens / durationSeconds))
+        }
+        add("%.1f s".format(durationSeconds))
+        message.outputTokens?.let { add("$it tok") }
+        message.inputTokens?.let { add("in $it") }
+    }
+    if (parts.isEmpty()) return
+    Spacer(Modifier.height(6.dp))
+    Text(
+        parts.joinToString("  ·  "),
+        style = MaterialTheme.typography.labelSmall,
+        color = NitronTheme.colors.textTertiary,
+    )
+}
+
+@Composable
+private fun StreamingDots(label: String) {
     val transition = rememberInfiniteTransition(label = "streaming")
     val alpha by transition.animateFloat(
         initialValue = 0.25f,
@@ -446,11 +505,36 @@ private fun StreamingDots() {
         Box(Modifier.padding(end = 5.dp).size(7.dp).background(NitronTheme.colors.accent.copy(alpha = alpha), CircleShape))
         Box(Modifier.padding(end = 5.dp).size(7.dp).background(NitronTheme.colors.accent.copy(alpha = alpha * 0.7f), CircleShape))
         Box(Modifier.padding(end = 8.dp).size(7.dp).background(NitronTheme.colors.accent.copy(alpha = alpha * 0.4f), CircleShape))
-        Text(
-            "Thinking…",
-            style = MaterialTheme.typography.labelMedium,
-            color = NitronTheme.colors.textSecondary,
+        Text(label, style = MaterialTheme.typography.labelMedium, color = NitronTheme.colors.textSecondary)
+    }
+}
+
+/** Small circular gauge showing how much of the context window is used. */
+@Composable
+private fun ContextRing(progress: Float, modifier: Modifier = Modifier) {
+    val ringColor = when {
+        progress > 0.85f -> NitronTheme.colors.destructive
+        progress > 0.6f -> NitronTheme.colors.accent
+        else -> NitronTheme.colors.textTertiary
+    }
+    Canvas(modifier.size(24.dp)) {
+        val stroke = Stroke(width = 2.5.dp.toPx(), cap = StrokeCap.Round)
+        drawArc(
+            color = ringColor.copy(alpha = 0.22f),
+            startAngle = 0f,
+            sweepAngle = 360f,
+            useCenter = false,
+            style = stroke,
         )
+        if (progress > 0.01f) {
+            drawArc(
+                color = ringColor,
+                startAngle = -90f,
+                sweepAngle = 360f * progress,
+                useCenter = false,
+                style = stroke,
+            )
+        }
     }
 }
 
@@ -459,13 +543,17 @@ private fun Composer(
     draft: String,
     pendingAttachments: List<com.nitronbox.app.data.model.AttachmentReference>,
     streaming: Boolean,
+    modelLabel: String,
+    contextUsage: Float,
     onDraftChange: (String) -> Unit,
     onSend: () -> Unit,
     onStop: () -> Unit,
     onPickAttachments: (List<Uri>) -> Unit,
     onRemoveAttachment: (com.nitronbox.app.data.model.AttachmentReference) -> Unit,
+    onOpenModelPicker: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val strings = LocalStrings.current
     val pickDocuments = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         if (uris.isNotEmpty()) onPickAttachments(uris)
     }
@@ -477,7 +565,11 @@ private fun Composer(
             .nitronSurface(SurfaceLevel.Overlay, NitronTheme.shapes.extraLarge)
             .padding(7.dp),
     ) {
-        if (pendingAttachments.isNotEmpty()) {
+        AnimatedVisibility(
+            visible = pendingAttachments.isNotEmpty(),
+            enter = expandVertically() + fadeIn(),
+            exit = shrinkVertically() + fadeOut(),
+        ) {
             LazyRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier.padding(start = 6.dp, end = 6.dp, top = 2.dp, bottom = 6.dp),
@@ -490,7 +582,7 @@ private fun Composer(
         TextField(
             value = draft,
             onValueChange = onDraftChange,
-            placeholder = { Text("Message your workspace…", color = NitronTheme.colors.textSecondary) },
+            placeholder = { Text(strings.messageYourWorkspace, color = NitronTheme.colors.textSecondary) },
             modifier = Modifier.fillMaxWidth(),
             textStyle = MaterialTheme.typography.bodyLarge.copy(color = NitronTheme.colors.textPrimary),
             minLines = 1,
@@ -507,12 +599,45 @@ private fun Composer(
             IconButton(onClick = { pickDocuments.launch(arrayOf("*/*")) }, modifier = Modifier.size(40.dp)) {
                 Icon(
                     Icons.Rounded.AttachFile,
-                    "Attach file",
+                    strings.attachFile,
                     tint = NitronTheme.colors.textSecondary,
                     modifier = Modifier.size(20.dp),
                 )
             }
+            // Model selector lives next to the attach button, always one tap away.
+            Row(
+                Modifier
+                    .weight(1f, fill = false)
+                    .nitronSurface(SurfaceLevel.Muted, NitronTheme.shapes.pill)
+                    .pressableRipple(shape = NitronTheme.shapes.pill, onClick = onOpenModelPicker)
+                    .padding(start = 10.dp, end = 8.dp, top = 6.dp, bottom = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    Icons.Rounded.AutoAwesome,
+                    null,
+                    tint = NitronTheme.colors.accent,
+                    modifier = Modifier.size(14.dp),
+                )
+                Spacer(Modifier.padding(3.dp))
+                Text(
+                    modelLabel,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = NitronTheme.colors.textPrimary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.widthIn(max = 150.dp),
+                )
+                Icon(
+                    Icons.Rounded.ExpandMore,
+                    null,
+                    tint = NitronTheme.colors.textTertiary,
+                    modifier = Modifier.size(15.dp),
+                )
+            }
             Spacer(Modifier.weight(1f))
+            ContextRing(contextUsage)
+            Spacer(Modifier.padding(3.dp))
             Box(
                 Modifier
                     .size(42.dp)
@@ -520,17 +645,14 @@ private fun Composer(
                         if (streaming) NitronTheme.colors.destructive else NitronTheme.colors.primary,
                         CircleShape,
                     )
-                    .pressableRipple(
-                        enabled = streaming || canSend,
-                        shape = CircleShape,
-                    ) {
+                    .pressableRipple(enabled = streaming || canSend, shape = CircleShape) {
                         if (streaming) onStop() else onSend()
                     },
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
                     if (streaming) Icons.Rounded.Stop else Icons.Rounded.ArrowUpward,
-                    if (streaming) "Stop generating" else "Send",
+                    if (streaming) strings.stopGenerating else strings.send,
                     tint = if (streaming || canSend) NitronTheme.colors.onPrimary else NitronTheme.colors.textTertiary,
                     modifier = Modifier.size(21.dp),
                 )
@@ -563,7 +685,7 @@ fun AttachmentChip(name: String, byteSize: Long, onRemove: (() -> Unit)?) {
         }
         if (onRemove != null) {
             IconButton(onClick = onRemove, modifier = Modifier.size(26.dp)) {
-                Icon(Icons.Rounded.Close, "Remove attachment", tint = NitronTheme.colors.textSecondary, modifier = Modifier.size(15.dp))
+                Icon(Icons.Rounded.Close, "Remove", tint = NitronTheme.colors.textSecondary, modifier = Modifier.size(15.dp))
             }
         }
     }

@@ -17,6 +17,10 @@ data class ActiveModel(
     val displayName: String,
 )
 
+enum class ThemeModeSetting { SYSTEM, LIGHT, DARK }
+
+enum class LanguageSetting { SYSTEM, ENGLISH, RUSSIAN }
+
 /**
  * Process-wide UI state that should survive restarts but does not belong in Room:
  * which workspace/conversation is open and which model is selected.
@@ -30,6 +34,18 @@ class AppSettings(private val context: Context) {
         val providerId = prefs[KEY_MODEL_PROVIDER] ?: return@map null
         val modelId = prefs[KEY_MODEL_ID] ?: return@map null
         ActiveModel(providerId, modelId, prefs[KEY_MODEL_DISPLAY] ?: modelId)
+    }
+
+    val themeMode: Flow<ThemeModeSetting> = context.dataStore.data.map { prefs ->
+        prefs[KEY_THEME_MODE]?.let { stored ->
+            ThemeModeSetting.entries.firstOrNull { it.name == stored }
+        } ?: ThemeModeSetting.SYSTEM
+    }
+
+    val language: Flow<LanguageSetting> = context.dataStore.data.map { prefs ->
+        prefs[KEY_LANGUAGE]?.let { stored ->
+            LanguageSetting.entries.firstOrNull { it.name == stored }
+        } ?: LanguageSetting.SYSTEM
     }
 
     suspend fun setActiveWorkspace(id: String?) = context.dataStore.edit { prefs ->
@@ -52,6 +68,18 @@ class AppSettings(private val context: Context) {
         }
     }
 
+    suspend fun setThemeMode(mode: ThemeModeSetting) = context.dataStore.edit { prefs ->
+        prefs[KEY_THEME_MODE] = mode.name
+    }
+
+    suspend fun setLanguage(language: LanguageSetting) = context.dataStore.edit { prefs ->
+        prefs[KEY_LANGUAGE] = language.name
+    }
+
+    suspend fun loadThemeMode(): ThemeModeSetting = themeMode.first()
+
+    suspend fun loadLanguage(): LanguageSetting = language.first()
+
     suspend fun loadActiveModel(): ActiveModel? = activeModel.first()
 
     private companion object {
@@ -60,5 +88,7 @@ class AppSettings(private val context: Context) {
         val KEY_MODEL_PROVIDER = stringPreferencesKey("active_model_provider")
         val KEY_MODEL_ID = stringPreferencesKey("active_model_id")
         val KEY_MODEL_DISPLAY = stringPreferencesKey("active_model_display")
+        val KEY_THEME_MODE = stringPreferencesKey("theme_mode")
+        val KEY_LANGUAGE = stringPreferencesKey("language")
     }
 }

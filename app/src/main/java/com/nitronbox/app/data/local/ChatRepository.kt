@@ -57,7 +57,7 @@ class ChatRepository(
         val conversation = ConversationEntity(
             id = newId(),
             workspaceId = workspaceId,
-            title = title.ifBlank { "New conversation" },
+            title = title.ifBlank { DEFAULT_TITLE },
             createdAtEpochMillis = now,
             updatedAtEpochMillis = now,
         )
@@ -146,8 +146,11 @@ class ChatRepository(
 
     companion object {
         const val TITLE_MAX_LENGTH = 80
+        const val DEFAULT_TITLE = "New conversation"
 
         fun newId(): String = java.util.UUID.randomUUID().toString()
+
+        fun defaultConversationTitle(): String = DEFAULT_TITLE
     }
 }
 
@@ -164,6 +167,7 @@ private fun MessageWithAttachments.toDomain() = ChatMessage(
     inputTokens = message.inputTokens,
     outputTokens = message.outputTokens,
     errorText = message.errorText,
+    generationDurationMillis = message.generationDurationMillis,
 )
 
 private fun AttachmentEntity.toDomain() = AttachmentReference(
@@ -188,6 +192,7 @@ private fun ChatMessage.toEntity() = MessageEntity(
     inputTokens = inputTokens,
     outputTokens = outputTokens,
     errorText = errorText,
+    generationDurationMillis = generationDurationMillis,
 )
 
 private fun AttachmentReference.toEntity(messageId: String) = AttachmentEntity(
