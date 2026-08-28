@@ -36,6 +36,11 @@ class ModelCatalogStore(
         )
     }
 
+    /** Publishes a catalog fetched outside the normal refresh path (draft providers). */
+    fun putModels(providerId: String, models: List<DiscoveredModel>) {
+        _models.value = _models.value + (providerId to models)
+    }
+
     fun forget(providerId: String) {
         _models.value = _models.value - providerId
     }
