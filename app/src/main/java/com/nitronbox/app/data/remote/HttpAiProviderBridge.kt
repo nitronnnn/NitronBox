@@ -211,7 +211,8 @@ class HttpAiProviderBridge(
             body = buildJsonObject {
                 put("model", request.modelId)
                 put("stream", true)
-                put("max_tokens", request.generation.maxOutputTokens)
+                // The Anthropic API has no "unlimited" mode; use a generous fallback.
+                put("max_tokens", request.generation.maxOutputTokens ?: 8_192)
                 put("temperature", request.generation.temperature)
                 put("top_p", request.generation.topP)
                 if (system.isNotBlank()) put("system", system)
@@ -249,7 +250,7 @@ class HttpAiProviderBridge(
                 put("generationConfig", buildJsonObject {
                     put("temperature", request.generation.temperature)
                     put("topP", request.generation.topP)
-                    put("maxOutputTokens", request.generation.maxOutputTokens)
+                    request.generation.maxOutputTokens?.let { put("maxOutputTokens", it) }
                 })
             },
         )
@@ -277,7 +278,7 @@ class HttpAiProviderBridge(
                 put("options", buildJsonObject {
                     put("temperature", request.generation.temperature)
                     put("top_p", request.generation.topP)
-                    put("num_predict", request.generation.maxOutputTokens)
+                    request.generation.maxOutputTokens?.let { put("num_predict", it) }
                 })
             },
         )
@@ -286,7 +287,7 @@ class HttpAiProviderBridge(
     private fun kotlinx.serialization.json.JsonObjectBuilder.putGeneration(request: ChatCompletionRequest) {
         put("temperature", request.generation.temperature)
         put("top_p", request.generation.topP)
-        put("max_tokens", request.generation.maxOutputTokens)
+        request.generation.maxOutputTokens?.let { put("max_tokens", it) }
         request.generation.frequencyPenalty?.let { put("frequency_penalty", it) }
         request.generation.presencePenalty?.let { put("presence_penalty", it) }
         request.generation.seed?.let { put("seed", it) }

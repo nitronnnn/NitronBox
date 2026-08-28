@@ -7,6 +7,8 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
@@ -40,7 +42,16 @@ class MainActivity : ComponentActivity() {
                     workspaceTheme = WorkspaceTheme(mode = themeMode.toDomain()),
                 ) {
                     val navController = rememberNavController()
-                    NavHost(navController, startDestination = Routes.CHAT, modifier = Modifier) {
+                    NavHost(
+                        navController,
+                        startDestination = Routes.CHAT,
+                        modifier = Modifier,
+                        // Quick cross-fade instead of the default jump-cut: no white flash.
+                        enterTransition = { fadeIn(androidx.compose.animation.core.tween(220)) },
+                        exitTransition = { fadeOut(androidx.compose.animation.core.tween(180)) },
+                        popEnterTransition = { fadeIn(androidx.compose.animation.core.tween(220)) },
+                        popExitTransition = { fadeOut(androidx.compose.animation.core.tween(180)) },
+                    ) {
                         composable(Routes.CHAT) {
                             val chatViewModel: ChatSessionViewModel = viewModel(factory = factory)
                             ChatScreen(

@@ -1,10 +1,12 @@
 package com.nitronbox.app.ui.components
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -21,7 +23,6 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
@@ -62,8 +63,12 @@ fun ConversationsPanel(
     var renaming by remember { mutableStateOf<ConversationEntity?>(null) }
     var deleting by remember { mutableStateOf<ConversationEntity?>(null) }
 
-    ModalDrawerSheet(modifier = modifier, drawerContainerColor = NitronTheme.colors.background) {
-        Column(Modifier.padding(14.dp)) {
+    Column(
+        Modifier
+            .fillMaxSize()
+            .background(NitronTheme.colors.background)
+            .padding(14.dp),
+    ) {
             Text(strings.workspaces, style = MaterialTheme.typography.labelMedium, color = NitronTheme.colors.textSecondary)
             Spacer(Modifier.height(8.dp))
             workspaces.forEach { workspace ->
@@ -156,7 +161,6 @@ fun ConversationsPanel(
                 }
             }
         }
-    }
 
     renaming?.let { conversation ->
         var title by remember(conversation.id) { mutableStateOf(conversation.title) }

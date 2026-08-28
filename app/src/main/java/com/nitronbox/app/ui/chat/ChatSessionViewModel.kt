@@ -73,6 +73,12 @@ class ChatSessionViewModel(private val container: AppContainer) : ViewModel() {
     /** Shared across the app, so models discovered in Settings appear here immediately. */
     val discoveredModels: StateFlow<Map<String, List<DiscoveredModel>>> = catalogStore.models
 
+    val wallpaper: StateFlow<com.nitronbox.app.data.settings.WallpaperPreset> = settings.wallpaper
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), com.nitronbox.app.data.settings.WallpaperPreset.NONE)
+
+    val wallpaperImageUri: StateFlow<String?> = settings.wallpaperImageUri
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
     val messages: kotlinx.coroutines.flow.Flow<PagingData<ChatMessage>> = settings.activeConversationId
         .flatMapLatest { id ->
             id?.let { repository.messages(it) } ?: flowOf<PagingData<ChatMessage>>(PagingData.empty())
@@ -122,6 +128,29 @@ class ChatSessionViewModel(private val container: AppContainer) : ViewModel() {
         if (id == null || list.none { it.id == id }) {
             list.firstOrNull()?.let { settings.setActiveWorkspace(it.id) }
         }
+        migrateLegacyDefaults()
+    }
+
+    /** Workspaces created before unlimited defaults keep working but get the new no-limit behavior. */
+    private suspend fun migrateLegacyDefaults() {
+        if (settings.legacyDefaultsMigrated.first()) return
+        repository.observeWorkspaces().first().forEach { workspace ->
+            val isLegacyDefault = workspace.generation.maxOutputTokens == 2_048 &&
+                workspace.contextPolicy.maxInputTokens == 16_384
+            if (isLegacyDefault) {
+                repository.saveWorkspace(
+                    workspace.copy(
+                        generation = workspace.generation.copy(maxOutputTokens = null),
+                        contextPolicy = workspace.contextPolicy.copy(
+                            maxInputTokens = com.nitronbox.app.data.model.ContextPolicy.UNLIMITED_CONTEXT_TOKENS,
+                            reservedOutputTokens = 0,
+                        ),
+                        updatedAtEpochMillis = System.currentTimeMillis(),
+                    ),
+                )
+            }
+        }
+        settings.markLegacyDefaultsMigrated()
     }
 
     private fun defaultWorkspace() = Workspace(
@@ -289,6 +318,25 @@ class ChatSessionViewModel(private val container: AppContainer) : ViewModel() {
             repository.providerProfiles().forEach { profile ->
                 if (!catalogStore.hasCatalog(profile.id)) refreshModels(profile.id)
             }
+        }
+    }
+
+    // --- Appearance ---
+
+    fun setWallpaper(preset: com.nitronbox.app.data.settings.WallpaperPreset) {
+        viewModelScope.launch { settings.setWallpaper(preset) }
+    }
+
+    fun setWallpaperImage(uri: android.net.Uri) {
+        viewModelScope.launch {
+            runCatching {
+                container.contentResolver.takePersistableUriPermission(
+                    uri,
+                    android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION,
+                )
+                settings.setWallpaperImageUri(uri.toString())
+                settings.setWallpaper(com.nitronbox.app.data.settings.WallpaperPreset.CUSTOM)
+            }.onFailure { emit("Unable to use this image") }
         }
     }
 

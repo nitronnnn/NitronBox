@@ -4,10 +4,12 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
+    <!-- Left blade of the N: rises to the right, vertical right edge. -->
     <path
-        android:fillColor="#7367FF"
-        android:pathData="M54,18A36,36 0,1 0,54 90A36,36 0,1 0,54 18" />
+        android:fillColor="#8AB6FF"
+        android:pathData="M30,77 L50,31 L50,77 Z" />
+    <!-- Right blade of the N: falls to the right, vertical left edge; a clear gap splits the mark. -->
     <path
-        android:fillColor="#FFFFFFFF"
-        android:pathData="M36,39C36,35.7 38.7,33 42,33H66C69.3,33 72,35.7 72,39V57C72,60.3 69.3,63 66,63H55L44,73V63H42C38.7,63 36,60.3 36,57Z" />
+        android:fillColor="#3FC8F5"
+        android:pathData="M58,31 L78,77 L58,77 Z" />
 </vector>

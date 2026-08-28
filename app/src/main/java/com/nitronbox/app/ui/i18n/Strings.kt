@@ -80,6 +80,9 @@ data class Strings(
     val reserveOutput: String,
     val overflowStrategy: String,
     val saveWorkspace: String,
+    val wallpaper: String,
+    val wallpaperPhoto: String,
+    val unlimitedHint: String,
 )
 
 val EnglishStrings = Strings(
@@ -154,6 +157,9 @@ val EnglishStrings = Strings(
     reserveOutput = "Reserve out",
     overflowStrategy = "Overflow strategy",
     saveWorkspace = "Save workspace",
+    wallpaper = "Wallpaper",
+    wallpaperPhoto = "Photo…",
+    unlimitedHint = "Leave empty for no limit",
 )
 
 val RussianStrings = Strings(
@@ -228,6 +234,9 @@ val RussianStrings = Strings(
     reserveOutput = "Резерв ответа",
     overflowStrategy = "Стратегия переполнения",
     saveWorkspace = "Сохранить пространство",
+    wallpaper = "Обои",
+    wallpaperPhoto = "Своя картинка…",
+    unlimitedHint = "Оставьте пустым — без лимита",
 )
 
 val LocalStrings = compositionLocalOf { EnglishStrings }

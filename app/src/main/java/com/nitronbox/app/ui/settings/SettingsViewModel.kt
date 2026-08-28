@@ -63,6 +63,30 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
         viewModelScope.launch { container.appSettings.setLanguage(language) }
     }
 
+    val wallpaper: StateFlow<com.nitronbox.app.data.settings.WallpaperPreset> =
+        container.appSettings.wallpaper
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), com.nitronbox.app.data.settings.WallpaperPreset.NONE)
+
+    val wallpaperImageUri: StateFlow<String?> = container.appSettings.wallpaperImageUri
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    fun setWallpaper(preset: com.nitronbox.app.data.settings.WallpaperPreset) {
+        viewModelScope.launch { container.appSettings.setWallpaper(preset) }
+    }
+
+    fun setWallpaperImage(uri: android.net.Uri) {
+        viewModelScope.launch {
+            runCatching {
+                container.contentResolver.takePersistableUriPermission(
+                    uri,
+                    android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION,
+                )
+                container.appSettings.setWallpaperImageUri(uri.toString())
+                container.appSettings.setWallpaper(com.nitronbox.app.data.settings.WallpaperPreset.CUSTOM)
+            }.onFailure { emit("Unable to use this image") }
+        }
+    }
+
     fun saveProvider(profile: ProviderProfile, apiKey: CharArray?) {
         viewModelScope.launch {
             runCatching {

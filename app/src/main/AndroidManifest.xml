@@ -8,7 +8,7 @@
         android:allowBackup="false"
         android:enableOnBackInvokedCallback="true"
         android:extractNativeLibs="false"
-        android:icon="@drawable/ic_launcher_foreground"
+        android:icon="@mipmap/ic_launcher"
         android:label="NitronBox"
         android:networkSecurityConfig="@xml/network_security_config"
         android:supportsRtl="true"

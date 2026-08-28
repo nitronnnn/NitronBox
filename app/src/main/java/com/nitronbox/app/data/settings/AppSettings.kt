@@ -21,6 +21,8 @@ enum class ThemeModeSetting { SYSTEM, LIGHT, DARK }
 
 enum class LanguageSetting { SYSTEM, ENGLISH, RUSSIAN }
 
+enum class WallpaperPreset { NONE, MIDNIGHT, AURORA, SUNSET, GRAPHITE, LOGO, CUSTOM }
+
 /**
  * Process-wide UI state that should survive restarts but does not belong in Room:
  * which workspace/conversation is open and which model is selected.
@@ -47,6 +49,14 @@ class AppSettings(private val context: Context) {
             LanguageSetting.entries.firstOrNull { it.name == stored }
         } ?: LanguageSetting.SYSTEM
     }
+
+    val wallpaper: Flow<WallpaperPreset> = context.dataStore.data.map { prefs ->
+        prefs[KEY_WALLPAPER]?.let { stored ->
+            WallpaperPreset.entries.firstOrNull { it.name == stored }
+        } ?: WallpaperPreset.NONE
+    }
+
+    val wallpaperImageUri: Flow<String?> = context.dataStore.data.map { it[KEY_WALLPAPER_URI] }
 
     suspend fun setActiveWorkspace(id: String?) = context.dataStore.edit { prefs ->
         if (id == null) prefs.remove(KEY_WORKSPACE_ID) else prefs[KEY_WORKSPACE_ID] = id
@@ -76,6 +86,21 @@ class AppSettings(private val context: Context) {
         prefs[KEY_LANGUAGE] = language.name
     }
 
+    suspend fun setWallpaper(preset: WallpaperPreset) = context.dataStore.edit { prefs ->
+        prefs[KEY_WALLPAPER] = preset.name
+    }
+
+    suspend fun setWallpaperImageUri(uri: String?) = context.dataStore.edit { prefs ->
+        if (uri == null) prefs.remove(KEY_WALLPAPER_URI) else prefs[KEY_WALLPAPER_URI] = uri
+    }
+
+    /** One-time upgrade: workspaces created with the old capped defaults become unlimited. */
+    val legacyDefaultsMigrated: Flow<Boolean> = context.dataStore.data.map { it[KEY_DEFAULTS_MIGRATED] == "true" }
+
+    suspend fun markLegacyDefaultsMigrated() = context.dataStore.edit { prefs ->
+        prefs[KEY_DEFAULTS_MIGRATED] = "true"
+    }
+
     suspend fun loadThemeMode(): ThemeModeSetting = themeMode.first()
 
     suspend fun loadLanguage(): LanguageSetting = language.first()
@@ -90,5 +115,8 @@ class AppSettings(private val context: Context) {
         val KEY_MODEL_DISPLAY = stringPreferencesKey("active_model_display")
         val KEY_THEME_MODE = stringPreferencesKey("theme_mode")
         val KEY_LANGUAGE = stringPreferencesKey("language")
+        val KEY_WALLPAPER = stringPreferencesKey("wallpaper_preset")
+        val KEY_WALLPAPER_URI = stringPreferencesKey("wallpaper_image_uri")
+        val KEY_DEFAULTS_MIGRATED = stringPreferencesKey("legacy_defaults_migrated")
     }
 }

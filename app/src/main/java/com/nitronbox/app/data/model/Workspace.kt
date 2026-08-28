@@ -82,7 +82,8 @@ data class FailoverPolicy(
 data class GenerationSettings(
     val temperature: Float = 0.7f,
     val topP: Float = 1f,
-    val maxOutputTokens: Int = 2_048,
+    /** Null means no cap is requested: the field is omitted from wire requests entirely. */
+    val maxOutputTokens: Int? = null,
     val frequencyPenalty: Float? = null,
     val presencePenalty: Float? = null,
     val seed: Long? = null,
@@ -91,8 +92,9 @@ data class GenerationSettings(
 
 @Serializable
 data class ContextPolicy(
-    val maxInputTokens: Int = 16_384,
-    val reservedOutputTokens: Int = 2_048,
+    /** Effectively unlimited by default; lower it to enable context-window trimming. */
+    val maxInputTokens: Int = UNLIMITED_CONTEXT_TOKENS,
+    val reservedOutputTokens: Int = 0,
     val strategy: ContextOverflowStrategy = ContextOverflowStrategy.PRUNE_OLDEST,
     val preserveRecentMessages: Int = 8,
     val summaryPrompt: String = DEFAULT_SUMMARY_PROMPT,
@@ -100,6 +102,7 @@ data class ContextPolicy(
     companion object {
         const val DEFAULT_SUMMARY_PROMPT =
             "Summarize the conversation faithfully. Preserve decisions, constraints, names, and open tasks."
+        const val UNLIMITED_CONTEXT_TOKENS = 1_000_000
     }
 }
 

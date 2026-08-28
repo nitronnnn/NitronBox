@@ -61,6 +61,7 @@ class AppContainer(application: Application) {
         .build()
     val providerRegistryFactory = ProviderRegistryFactory(credentialStore, httpClient, json)
     val modelCatalogStore = com.nitronbox.app.data.remote.ModelCatalogStore(chatRepository, providerRegistryFactory)
+    val contentResolver = application.contentResolver
 
     val contextWindowEngine: ContextWindowEngine by lazy {
         val summarizer = LlmConversationSummarizer(

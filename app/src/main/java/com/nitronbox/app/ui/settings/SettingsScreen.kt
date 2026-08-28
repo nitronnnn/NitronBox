@@ -6,6 +6,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -54,6 +55,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -99,7 +101,12 @@ fun SettingsScreen(
     val workspace by viewModel.activeWorkspace.collectAsState()
     val themeMode by viewModel.themeMode.collectAsState()
     val language by viewModel.language.collectAsState()
+    val wallpaper by viewModel.wallpaper.collectAsState()
+    val wallpaperImageUri by viewModel.wallpaperImageUri.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
+    val pickWallpaper = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.OpenDocument(),
+    ) { uri -> uri?.let(viewModel::setWallpaperImage) }
 
     LaunchedEffect(Unit) {
         viewModel.events.collect { snackbarHostState.showSnackbar(it) }
@@ -226,6 +233,14 @@ fun SettingsScreen(
                         selected = language,
                         onSelect = viewModel::setLanguage,
                     )
+                    HorizontalDivider(color = NitronTheme.colors.border)
+                    Text(strings.wallpaper, style = MaterialTheme.typography.labelLarge, color = NitronTheme.colors.textSecondary)
+                    WallpaperPicker(
+                        selected = wallpaper,
+                        imageUri = wallpaperImageUri,
+                        onSelect = viewModel::setWallpaper,
+                        onPickImage = { pickWallpaper.launch(arrayOf("image/*")) },
+                    )
                 }
             }
             item { HorizontalDivider(color = NitronTheme.colors.border) }
@@ -271,6 +286,101 @@ fun SettingsScreen(
                 prefill = null
                 editingProvider = null
             },
+        )
+    }
+}
+
+/** Row of wallpaper presets with mini previews plus a SAF photo picker entry. */
+@Composable
+private fun WallpaperPicker(
+    selected: com.nitronbox.app.data.settings.WallpaperPreset,
+    imageUri: String?,
+    onSelect: (com.nitronbox.app.data.settings.WallpaperPreset) -> Unit,
+    onPickImage: () -> Unit,
+) {
+    val strings = LocalStrings.current
+    val presets = listOf(
+        com.nitronbox.app.data.settings.WallpaperPreset.NONE to listOf(Color(0xFF16181D), Color(0xFF2A2D34)),
+        com.nitronbox.app.data.settings.WallpaperPreset.MIDNIGHT to listOf(Color(0xFF0B1428), Color(0xFF2C4A7C)),
+        com.nitronbox.app.data.settings.WallpaperPreset.AURORA to listOf(Color(0xFF07231D), Color(0xFF1E8F6E)),
+        com.nitronbox.app.data.settings.WallpaperPreset.SUNSET to listOf(Color(0xFF2B0F1E), Color(0xFF93395B)),
+        com.nitronbox.app.data.settings.WallpaperPreset.GRAPHITE to listOf(Color(0xFF0E0E10), Color(0xFF3A3A42)),
+        com.nitronbox.app.data.settings.WallpaperPreset.LOGO to listOf(Color(0xFF0C1020), Color(0xFF3FC8F5)),
+    )
+    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        items(presets) { (preset, previewColors) ->
+            val isSelected = preset == selected
+            WallpaperThumb(
+                previewColors = previewColors,
+                isSelected = isSelected,
+                onClick = { onSelect(preset) },
+            )
+        }
+        item {
+            val isSelected = selected == com.nitronbox.app.data.settings.WallpaperPreset.CUSTOM
+            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Box(
+                    Modifier
+                        .size(width = 62.dp, height = 42.dp)
+                        .nitronSurface(
+                            if (isSelected) SurfaceLevel.Raised else SurfaceLevel.Muted,
+                            NitronTheme.shapes.small,
+                        )
+                        .then(
+                            if (isSelected) {
+                                Modifier.background(color = NitronTheme.colors.accent, shape = NitronTheme.shapes.small)
+                            } else {
+                                Modifier
+                            },
+                        )
+                        .pressableRipple(shape = NitronTheme.shapes.small, onClick = onPickImage),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    if (isSelected && imageUri != null) {
+                        coil.compose.AsyncImage(
+                            model = imageUri,
+                            contentDescription = null,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    } else {
+                        Text("+", style = MaterialTheme.typography.titleMedium, color = NitronTheme.colors.textPrimary)
+                    }
+                }
+                Text(
+                    strings.wallpaperPhoto,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = NitronTheme.colors.textSecondary,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun WallpaperThumb(
+    previewColors: List<Color>,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+        modifier = Modifier.pressableRipple(shape = NitronTheme.shapes.small, onClick = onClick),
+    ) {
+        Box(
+            Modifier
+                .size(width = 62.dp, height = 42.dp)
+                .background(
+                    brush = androidx.compose.ui.graphics.Brush.verticalGradient(previewColors),
+                    shape = NitronTheme.shapes.small,
+                )
+                .then(
+                    if (isSelected) {
+                        Modifier.border(2.dp, NitronTheme.colors.accent, NitronTheme.shapes.small)
+                    } else {
+                        Modifier.border(1.dp, NitronTheme.colors.border, NitronTheme.shapes.small)
+                    },
+                ),
         )
     }
 }
@@ -521,11 +631,16 @@ private fun WorkspaceEditor(
             modifier = Modifier.fillMaxWidth(),
         )
         Text(strings.temperature(temperature), style = MaterialTheme.typography.labelMedium, color = NitronTheme.colors.textSecondary)
-        Slider(value = temperature, onValueChange = { temperature = it }, valueRange = 0f..2f)
+        com.nitronbox.app.ui.components.NitronSlider(
+            value = temperature,
+            onValueChange = { temperature = it },
+            valueRange = 0f..2f,
+        )
         OutlinedTextField(
             value = maxOutputTokens,
             onValueChange = { maxOutputTokens = it.filter(Char::isDigit) },
             label = { Text(strings.maxOutputTokens) },
+            supportingText = { Text(strings.unlimitedHint) },
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
         )
@@ -536,6 +651,7 @@ private fun WorkspaceEditor(
                 value = maxInputTokens,
                 onValueChange = { maxInputTokens = it.filter(Char::isDigit) },
                 label = { Text(strings.maxInput) },
+                supportingText = { Text(strings.unlimitedHint) },
                 singleLine = true,
                 modifier = Modifier.weight(1f),
             )
@@ -580,11 +696,12 @@ private fun WorkspaceEditor(
                         systemPrompt = systemPrompt,
                         generation = workspace.generation.copy(
                             temperature = temperature,
-                            maxOutputTokens = maxOutputTokens.toIntOrNull() ?: workspace.generation.maxOutputTokens,
+                            maxOutputTokens = maxOutputTokens.trim().toIntOrNull(),
                         ),
                         contextPolicy = workspace.contextPolicy.copy(
-                            maxInputTokens = maxInputTokens.toIntOrNull() ?: workspace.contextPolicy.maxInputTokens,
-                            reservedOutputTokens = reservedOutput.toIntOrNull() ?: workspace.contextPolicy.reservedOutputTokens,
+                            maxInputTokens = maxInputTokens.trim().toIntOrNull()
+                                ?: com.nitronbox.app.data.model.ContextPolicy.UNLIMITED_CONTEXT_TOKENS,
+                            reservedOutputTokens = reservedOutput.toIntOrNull() ?: 0,
                             strategy = strategy,
                         ),
                         updatedAtEpochMillis = System.currentTimeMillis(),

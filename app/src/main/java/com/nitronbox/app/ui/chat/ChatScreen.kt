@@ -18,8 +18,11 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -29,6 +32,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -63,27 +67,24 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
-import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
@@ -98,12 +99,11 @@ import com.nitronbox.app.ui.components.ConversationsPanel
 import com.nitronbox.app.ui.components.ModelPickerSheet
 import com.nitronbox.app.ui.chat.components.MarkdownRenderer
 import com.nitronbox.app.ui.i18n.LocalStrings
-import com.nitronbox.app.ui.theme.NitronBackground
 import com.nitronbox.app.ui.theme.NitronTheme
 import com.nitronbox.app.ui.theme.SurfaceLevel
+import com.nitronbox.app.ui.theme.WallpaperBackdrop
 import com.nitronbox.app.ui.theme.nitronSurface
 import com.nitronbox.app.ui.theme.pressableRipple
-import kotlinx.coroutines.launch
 
 @Composable
 fun ChatScreen(
@@ -135,35 +135,33 @@ fun ChatScreen(
         },
         containerColor = Color.Transparent,
     ) { scaffoldPadding ->
-        val drawerState = rememberDrawerState(initialValue = androidx.compose.material3.DrawerValue.Closed)
-        val scope = rememberCoroutineScope()
-        ModalNavigationDrawer(
-            drawerState = drawerState,
-            drawerContent = {
-                ConversationsPanel(
-                    viewModel = viewModel,
-                    modifier = Modifier.fillMaxWidth(0.86f),
-                )
-            },
-        ) {
-            var modelPickerOpen by remember { mutableStateOf(false) }
-            val openConversations: () -> Unit = { scope.launch { drawerState.open() } }
+        var conversationsOpen by remember { mutableStateOf(false) }
+        var modelPickerOpen by remember { mutableStateOf(false) }
+        val wallpaper by viewModel.wallpaper.collectAsState()
+        val wallpaperImageUri by viewModel.wallpaperImageUri.collectAsState()
 
-            // Blur the chat behind the model sheet (RenderEffect on API 31+, no-op below).
-            val blurProgress by animateFloatAsState(
-                targetValue = if (modelPickerOpen) 1f else 0f,
-                label = "blurProgress",
-            )
-            val blurModifier = Modifier.blur(18.dp * blurProgress)
-            NitronBackground(Modifier.padding(scaffoldPadding)) {
-                NitronBackground(Modifier.fillMaxSize().then(blurModifier)) {
-                    Column(Modifier.fillMaxSize()) {
-                        val statusTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+        // Blur the chat behind any overlay panel (RenderEffect on API 31+, no-op below).
+        val blurProgress by animateFloatAsState(
+            targetValue = if (modelPickerOpen || conversationsOpen) 1f else 0f,
+            label = "blurProgress",
+        )
+
+        Box(
+            Modifier
+                .padding(scaffoldPadding)
+                .fillMaxSize()
+                .background(NitronTheme.colors.background),
+        ) {
+            WallpaperBackdrop(wallpaper, wallpaperImageUri, Modifier.matchParentSize())
+
+            Box(Modifier.fillMaxSize().then(Modifier.blur(18.dp * blurProgress))) {
+                Column(Modifier.fillMaxSize()) {
+                    val statusTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
 
                     ChatHeader(
                         title = conversation?.title ?: workspace?.name ?: "NitronBox",
                         modelLabel = model?.displayName ?: strings.noModelSelected,
-                        onOpenConversations = openConversations,
+                        onOpenConversations = { conversationsOpen = true },
                         onOpenModelPicker = { modelPickerOpen = true },
                         onNewConversation = viewModel::newConversation,
                         onOpenSettings = onOpenSettings,
@@ -213,7 +211,6 @@ fun ChatScreen(
                             }
                         }
                     }
-                    }
                 }
 
                 Composer(
@@ -234,17 +231,53 @@ fun ChatScreen(
                         .imePadding()
                         .padding(start = 14.dp, end = 14.dp, bottom = 10.dp),
                 )
+            }
 
-                if (modelPickerOpen) {
-                    ModelPickerSheet(
-                        viewModel = viewModel,
-                        onDismiss = { modelPickerOpen = false },
-                        onOpenSettings = {
-                            modelPickerOpen = false
-                            onOpenSettings()
-                        },
-                    )
+            // Conversations overlay: scrim + sliding panel, fully custom (no system drawer).
+            AnimatedVisibility(
+                visible = conversationsOpen,
+                enter = fadeIn(tween(180)),
+                exit = fadeOut(tween(180)),
+            ) {
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.45f))
+                        .clickable { conversationsOpen = false },
+                )
+            }
+            AnimatedVisibility(
+                visible = conversationsOpen,
+                enter = slideInHorizontally(tween(260)) { -it } + fadeIn(tween(220)),
+                exit = slideOutHorizontally(tween(220)) { -it } + fadeOut(tween(180)),
+            ) {
+                val statusTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+                val navigationBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .padding(top = statusTop, bottom = navigationBottom),
+                ) {
+                    Box(
+                        Modifier
+                            .fillMaxHeight()
+                            .fillMaxWidth(0.86f)
+                            .nitronSurface(SurfaceLevel.Overlay, RectangleShape),
+                    ) {
+                        ConversationsPanel(viewModel = viewModel)
+                    }
                 }
+            }
+
+            if (modelPickerOpen) {
+                ModelPickerSheet(
+                    viewModel = viewModel,
+                    onDismiss = { modelPickerOpen = false },
+                    onOpenSettings = {
+                        modelPickerOpen = false
+                        onOpenSettings()
+                    },
+                )
             }
         }
     }
