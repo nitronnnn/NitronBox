@@ -119,11 +119,7 @@ class ChatSessionViewModel(private val container: AppContainer) : ViewModel() {
         .map { profiles -> container.providerRegistryFactory.create(profiles) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
-    /** One generation job per conversation — chats generate independently. */
-    private val generationJobs = MutableStateFlow<Map<String, Job>>(emptyMap())
-    val streamingConversationIds: StateFlow<Set<String>> =
-        generationJobs.map { it.keys }
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptySet())
+    private var generationJob: Job? = null
 
     // --- Creator mode ---
 
@@ -314,68 +310,37 @@ class ChatSessionViewModel(private val container: AppContainer) : ViewModel() {
             emit("Select a provider and model in Settings first.")
             return
         }
-        val currentId = activeConversation.value?.id
-        if (currentId != null && generationJobs.value.containsKey(currentId)) return
+        if (_isStreaming.value) return
         val attachments = _pendingAttachments.value
         _draft.value = ""
         _pendingAttachments.value = emptyList()
-        val conversationId = currentId
-        // Creator mode: a lazily created conversation must be born with its folder,
-        // otherwise it lands in the regular chat list.
-        val creatorModeNow = _creatorMode.value
+        val conversationId = activeConversation.value?.id
         generationJob = viewModelScope.launch {
             try {
-                val folderForNew = if (conversationId == null && creatorModeNow) {
-                    val folder = settings.activeCreatorFolder.first()
-                    if (folder == null) {
-                        emit("Select a project folder first.")
-                        _draft.value = _draft.value.ifBlank { text }
-                        return@launch
-                    }
-                    folder
-                } else {
-                    null
-                }
-                val prepared = service.prepareUserMessage(
-                    workspace,
-                    conversationId,
-                    text,
-                    attachments,
-                    folderForNew,
-                )
+                val prepared = service.prepareUserMessage(workspace, conversationId, text, attachments)
                 if (conversationId != prepared.conversationId) {
                     settings.setActiveConversation(prepared.conversationId)
                 }
-
                 // Creator chats get filesystem tools rooted at their project folder.
-                val storedFolder = repository.conversation(prepared.conversationId)?.folderUri
-                    ?: folderForNew
-                val creatorTools = storedFolder?.let {
-                    runCatching { container.creatorFileTools.rootFor(it) }.getOrNull()
-                }?.let { container.creatorFileTools }
-
-                val jobKey = prepared.conversationId
-                generationJobs.value = generationJobs.value + (jobKey to kotlinx.coroutines.currentCoroutineContext()[Job]!!)
-                try {
-                    runGeneration(
-                        conversationId = jobKey,
-                        workspace = workspace,
-                        target = ModelTarget(model.providerId, model.modelId, model.displayName),
-                        creatorTools = creatorTools,
-                        creatorRootUri = if (creatorTools != null) storedFolder else null,
-                        skills = settings.loadSkills(),
-                    )
-                } finally {
-                    generationJobs.value = generationJobs.value - jobKey
+                val folderUri = repository.conversation(prepared.conversationId)?.folderUri
+                    ?: _creatorMode.value.takeIf { it }?.let { settings.activeCreatorFolder.first() }
+                val creatorTools = folderUri?.let { container.creatorFileTools.rootFor(it) }?.let {
+                    container.creatorFileTools
                 }
+                runGeneration(
+                    conversationId = prepared.conversationId,
+                    workspace = workspace,
+                    target = ModelTarget(model.providerId, model.modelId, model.displayName),
+                    creatorTools = creatorTools,
+                    creatorRootUri = if (creatorTools != null) folderUri else null,
+                    skills = settings.loadSkills(),
+                )
             } catch (failure: Exception) {
                 _draft.value = _draft.value.ifBlank { text }
                 emit(failure.message ?: "Unable to send the message")
             }
         }
     }
-
-    private var generationJob: Job? = null
 
     private suspend fun runGeneration(
         conversationId: String,
@@ -407,12 +372,8 @@ class ChatSessionViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
 
-    private var generationJobUnused: Job? = null
-
     fun stopGeneration() {
-        activeConversation.value?.id?.let { id ->
-            generationJobs.value[id]?.cancel()
-        }
+        generationJob?.cancel()
     }
 
     /** Retries a failed reply or regenerates an existing assistant answer. */
@@ -422,24 +383,17 @@ class ChatSessionViewModel(private val container: AppContainer) : ViewModel() {
             emit("Select a provider and model in Settings first.")
             return
         }
-        if (generationJobs.value.containsKey(conversationOf(messageId))) return
+        if (_isStreaming.value) return
         generationJob = viewModelScope.launch {
             val conversationId = service.deleteForRetry(messageId) ?: return@launch
-            generationJobs.value = generationJobs.value + (conversationId to kotlin.coroutines.coroutineContext[Job]!!)
-            try {
-                runGeneration(
-                    conversationId = conversationId,
-                    workspace = workspace,
-                    target = ModelTarget(model.providerId, model.modelId, model.displayName),
-                    skills = settings.loadSkills(),
-                )
-            } finally {
-                generationJobs.value = generationJobs.value - conversationId
-            }
+            runGeneration(
+                conversationId = conversationId,
+                workspace = workspace,
+                target = ModelTarget(model.providerId, model.modelId, model.displayName),
+                skills = settings.loadSkills(),
+            )
         }
     }
-
-    private fun conversationOf(messageId: String): String? = null
 
     fun deleteMessage(messageId: String) {
         viewModelScope.launch { repository.deleteMessage(messageId) }

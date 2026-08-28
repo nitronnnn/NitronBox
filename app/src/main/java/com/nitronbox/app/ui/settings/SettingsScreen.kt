@@ -21,7 +21,6 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -413,8 +412,8 @@ fun SettingsScreen(
                 prefill = null
                 editingProvider = null
             },
-            onTest = viewModel::testDraft,
-            onDiscover = viewModel::discoverDraft,
+            onTest = { profileId -> viewModel.testProvider(profileId) },
+            onDiscover = { profileId -> viewModel.discoverModels(profileId) },
             onDeleteRequest = { profile ->
                 deletingProvider = profile
             },
@@ -567,13 +566,7 @@ private fun WallpaperPanel(
         com.nitronbox.app.data.settings.WallpaperPreset.GRAPHITE,
     )
     com.nitronbox.app.ui.components.NitronBottomPanel(visible = true, onDismiss = onDismiss, modifier = modifier) {
-        Column(
-            Modifier
-                .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp)
-                .padding(bottom = 20.dp),
-        ) {
+        Column(Modifier.padding(horizontal = 16.dp).padding(bottom = 20.dp)) {
             Text(strings.wallpaper, style = MaterialTheme.typography.headlineSmall, color = NitronTheme.colors.textPrimary)
             Spacer(Modifier.height(12.dp))
             if (showGallery) {
@@ -602,12 +595,7 @@ private fun WallpaperPanel(
                     }
                 }
             } else {
-            androidx.compose.foundation.lazy.LazyRow(
-                Modifier
-                    .fillMaxWidth()
-                    .height(92.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
+            androidx.compose.foundation.lazy.LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 items(presets.size) { index ->
                     val preset = presets[index]
                     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -761,8 +749,8 @@ private fun ProviderEditorSheet(
     prefillBaseUrl: String,
     onDismiss: () -> Unit,
     onSave: (ProviderProfile, CharArray?) -> Unit,
-    onTest: (ProviderProfile) -> Unit,
-    onDiscover: (ProviderProfile) -> Unit,
+    onTest: (String) -> Unit,
+    onDiscover: (String) -> Unit,
     onDeleteRequest: (ProviderProfile) -> Unit,
 ) {
     val strings = LocalStrings.current
@@ -818,18 +806,12 @@ private fun ProviderEditorSheet(
             )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(
-                    onClick = {
-                        val id = initial?.id ?: "provider-draft"
-                        onTest(ProviderProfile(id, displayName.trim(), baseUrl.trim(), initial?.credentialAlias, protocol))
-                    },
-                    enabled = valid,
+                    onClick = { initial?.let { onTest(it.id) } },
+                    enabled = initial != null,
                 ) { Text(strings.test) }
                 OutlinedButton(
-                    onClick = {
-                        val id = initial?.id ?: "provider-draft"
-                        onDiscover(ProviderProfile(id, displayName.trim(), baseUrl.trim(), initial?.credentialAlias, protocol))
-                    },
-                    enabled = valid,
+                    onClick = { initial?.let { onDiscover(it.id) } },
+                    enabled = initial != null,
                 ) { Text(strings.loadModels) }
             }
             Button(

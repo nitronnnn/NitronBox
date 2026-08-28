@@ -34,10 +34,10 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBars
@@ -50,55 +50,50 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.draw.clip
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.ArrowUpward
 import androidx.compose.material.icons.rounded.AttachFile
-import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Build
+import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.Menu
 import androidx.compose.material.icons.rounded.MoreVert
+import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Stop
-import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
-import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -108,14 +103,13 @@ import com.nitronbox.app.data.model.ChatMessage
 import com.nitronbox.app.data.model.MessageRole
 import com.nitronbox.app.data.model.MessageStatus
 import com.nitronbox.app.ui.components.ConversationsPanel
-import com.nitronbox.app.ui.components.FrostSurface
-import com.nitronbox.app.ui.components.LocalWallpaperGeometry
-import com.nitronbox.app.ui.components.ModelPickerSheet
 import com.nitronbox.app.ui.components.NitronCenterDialog
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import com.nitronbox.app.ui.components.SpinningLogo
 import com.nitronbox.app.ui.components.TextButtonFlat
-import com.nitronbox.app.ui.components.WallpaperGeometry
-import com.nitronbox.app.ui.components.frostPanel
+import com.nitronbox.app.ui.components.ModelPickerSheet
 import com.nitronbox.app.ui.chat.components.MarkdownRenderer
 import com.nitronbox.app.ui.i18n.LocalStrings
 import com.nitronbox.app.ui.theme.LocalHazeState
@@ -124,12 +118,9 @@ import com.nitronbox.app.ui.theme.NitronTheme
 import com.nitronbox.app.ui.theme.SurfaceLevel
 import com.nitronbox.app.ui.theme.WallpaperBackdrop
 import com.nitronbox.app.ui.theme.nitronSurface
+import com.nitronbox.app.ui.components.frostPanel
 import com.nitronbox.app.ui.theme.pressableRipple
 import dev.chrisbanes.haze.hazeSource
-import kotlinx.coroutines.launch
-import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 
 @Composable
 fun ChatScreen(
@@ -143,8 +134,7 @@ fun ChatScreen(
     val conversation by viewModel.activeConversation.collectAsState()
     val model by viewModel.activeModel.collectAsState()
     val draft by viewModel.draft.collectAsState()
-    val streamingIds by viewModel.streamingConversationIds.collectAsState()
-    val streaming = streamingIds.contains(conversation?.id)
+    val streaming by viewModel.isStreaming.collectAsState()
     val pendingAttachments by viewModel.pendingAttachments.collectAsState()
     val contextUsage by viewModel.contextUsage.collectAsState()
     val messages = viewModel.messages.collectAsLazyPagingItems()
@@ -162,299 +152,284 @@ fun ChatScreen(
         },
         containerColor = Color.Transparent,
     ) { scaffoldPadding ->
-        val drawerState = rememberDrawerState(initialValue = androidx.compose.material3.DrawerValue.Closed)
-        val scope = rememberCoroutineScope()
+        val hazeState = androidx.compose.runtime.remember { dev.chrisbanes.haze.HazeState() }
+        androidx.compose.runtime.CompositionLocalProvider(LocalHazeState provides hazeState) {
         var conversationsOpen by remember { mutableStateOf(false) }
         var modelPickerOpen by remember { mutableStateOf(false) }
         var renaming by remember { mutableStateOf<com.nitronbox.app.data.local.ConversationEntity?>(null) }
         var deleting by remember { mutableStateOf<com.nitronbox.app.data.local.ConversationEntity?>(null) }
         val fx = LocalUiFx.current
-        val hazeState = androidx.compose.runtime.remember { dev.chrisbanes.haze.HazeState() }
         val wallpaper by viewModel.wallpaper.collectAsState()
         val wallpaperImageUri by viewModel.wallpaperImageUri.collectAsState()
-        var wallpaperTop by remember { mutableStateOf(0f) }
-        val listState = rememberLazyListState()
-        val parallax by remember {
-            androidx.compose.runtime.derivedStateOf {
-                (listState.firstVisibleItemIndex * 800 + listState.firstVisibleItemScrollOffset).toFloat()
-            }
-        }
 
-        val wallpaperTopState = remember { mutableStateOf(0f) }
-        val wallpaperGeometry = WallpaperGeometry(
-            preset = wallpaper,
-            imageUri = wallpaperImageUri,
-            top = wallpaperTopState.value,
-            parallax = parallax * 0.12f,
+        // Blur the chat behind any overlay panel (RenderEffect on API 31+, no-op below).
+        val blurProgress by animateFloatAsState(
+            targetValue = if (modelPickerOpen || conversationsOpen) 1f else 0f,
+            label = "blurProgress",
         )
+        val blurRadius = if (fx.blurEnabled) fx.blurRadius.dp else 0.dp
 
-        ModalNavigationDrawer(
-            drawerState = drawerState,
-            drawerContent = {
-                ConversationsPanel(viewModel = viewModel)
-            },
+        Box(
+            Modifier
+                .padding(scaffoldPadding)
+                .fillMaxSize()
+                .background(NitronTheme.colors.background),
         ) {
-            CompositionLocalProvider(
-                LocalHazeState provides hazeState,
-                LocalWallpaperGeometry provides wallpaperGeometry,
-            ) {
-                val blurProgress by animateFloatAsState(
-                    targetValue = if (modelPickerOpen || conversationsOpen) 1f else 0f,
-                    label = "blurProgress",
+            // Content is the haze source; frosted surfaces above blur it for real.
+            val listState = rememberLazyListState()
+            // Parallax: the wallpaper trails the scroll for depth.
+            val parallax by remember {
+                androidx.compose.runtime.derivedStateOf {
+                    (listState.firstVisibleItemIndex * 800 + listState.firstVisibleItemScrollOffset).toFloat()
+                }
+            }
+            Box(Modifier.fillMaxSize().hazeSource(hazeState)) {
+                WallpaperBackdrop(
+                    wallpaper,
+                    wallpaperImageUri,
+                    Modifier
+                        .matchParentSize()
+                        .graphicsLayer { translationY = parallax * 0.12f },
                 )
-                val blurRadius = if (fx.blurEnabled) fx.blurRadius.dp else 0.dp
+                Column(Modifier.fillMaxSize()) {
+                    LaunchedEffect(messages.itemCount) {
+                        if (messages.itemCount > 0) listState.scrollToItem(0)
+                    }
+
+                    LazyColumn(
+                        state = listState,
+                        modifier = Modifier.fillMaxSize(),
+                        reverseLayout = true,
+                        contentPadding = PaddingValues(
+                            start = 14.dp,
+                            end = 14.dp,
+                            top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 78.dp,
+                            bottom = 132.dp,
+                        ),
+                        verticalArrangement = Arrangement.spacedBy(14.dp),
+                    ) {
+                        if (messages.itemCount == 0) {
+                            item(key = "welcome") {
+                                WelcomeCard(
+                                    workspaceName = workspace?.name ?: "NitronBox",
+                                    modelConfigured = model != null,
+                                    onConfigureModels = onOpenSettings,
+                                )
+                            }
+                        }
+                        items(count = messages.itemCount, key = messages.itemKey(ChatMessage::id)) { index ->
+                            val message = messages[index] ?: return@items
+                            Box(Modifier.animateItem()) {
+                                MessageBubble(
+                                    message = message,
+                                    onRegenerate = { viewModel.regenerate(message.id) },
+                                    onDelete = { viewModel.deleteMessage(message.id) },
+                                    onOpenAttachment = { attachment -> openAttachment(context, viewModel, attachment) },
+                                    onCopy = { content ->
+                                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                        clipboard.setPrimaryClip(ClipData.newPlainText("message", content))
+                                    },
+                                )
+                            }
+                        }
+                    }
+                }
+
+                }
+
+                ChatHeader(
+                    title = conversation?.title ?: workspace?.name ?: "NitronBox",
+                    modelLabel = model?.displayName ?: strings.noModelSelected,
+                    onOpenConversations = { conversationsOpen = true },
+                    onOpenModelPicker = { modelPickerOpen = true },
+                    onNewConversation = viewModel::newConversation,
+                    onOpenSettings = onOpenSettings,
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(top = statusTopForHeader(), start = 14.dp, end = 14.dp),
+                )
+
+                Composer(
+                    draft = draft,
+                    pendingAttachments = pendingAttachments,
+                    streaming = streaming,
+                    modelLabel = model?.displayName ?: strings.noModelSelected,
+                    contextUsage = contextUsage,
+                    onDraftChange = viewModel::onDraftChange,
+                    onSend = viewModel::send,
+                    onStop = viewModel::stopGeneration,
+                    onPickAttachments = viewModel::addAttachments,
+                    onRemoveAttachment = viewModel::removeAttachment,
+                    onOpenModelPicker = { modelPickerOpen = true },
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .navigationBarsPadding()
+                        .imePadding()
+                        .padding(start = 14.dp, end = 14.dp, bottom = 10.dp),
+                )
+            }
+
+            // Conversations overlay: scrim + sliding panel, fully custom (no system drawer).
+            AnimatedVisibility(
+                visible = conversationsOpen,
+                enter = fadeIn(tween(180)),
+                exit = fadeOut(tween(180)),
+            ) {
                 Box(
                     Modifier
-                        .padding(scaffoldPadding)
                         .fillMaxSize()
-                        .background(NitronTheme.colors.background),
+                        .background(Color.Black.copy(alpha = 0.45f))
+                        .clickable { conversationsOpen = false },
+                )
+            }
+            AnimatedVisibility(
+                visible = conversationsOpen,
+                enter = slideInHorizontally(tween(260)) { -it } + fadeIn(tween(220)),
+                exit = slideOutHorizontally(tween(220)) { -it } + fadeOut(tween(180)),
+            ) {
+                val statusTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+                val navigationBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .padding(top = statusTop, bottom = navigationBottom),
                 ) {
-                    // Content is the haze source; frosted surfaces above blur it for real.
-                        Box(Modifier.fillMaxSize().hazeSource(hazeState)) {
-                            WallpaperBackdrop(
-                                wallpaper,
-                                wallpaperImageUri,
-                                Modifier
-                                    .matchParentSize()
-                                    .onGloballyPositioned { wallpaperTopState.value = it.positionInRoot().y }
-                                    .graphicsLayer { translationY = parallax * 0.12f },
-                            )
-                            Column(Modifier.fillMaxSize()) {
-                                LaunchedEffect(messages.itemCount) {
-                                    if (messages.itemCount > 0) listState.scrollToItem(0)
-                                }
-                                LazyColumn(
-                                    state = listState,
-                                    modifier = Modifier.fillMaxSize(),
-                                    reverseLayout = true,
-                                    contentPadding = PaddingValues(
-                                        start = 14.dp,
-                                        end = 14.dp,
-                                        top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 78.dp,
-                                        bottom = 132.dp,
-                                    ),
-                                    verticalArrangement = Arrangement.spacedBy(14.dp),
-                                ) {
-                                    if (messages.itemCount == 0) {
-                                        item(key = "welcome") {
-                                            WelcomeCard(
-                                                workspaceName = workspace?.name ?: "NitronBox",
-                                                modelConfigured = model != null,
-                                                onConfigureModels = onOpenSettings,
-                                            )
-                                        }
-                                    }
-                                    items(count = messages.itemCount, key = messages.itemKey(ChatMessage::id)) { index ->
-                                        val message = messages[index] ?: return@items
-                                        Box(Modifier.animateItem()) {
-                                            MessageBubble(
-                                                message = message,
-                                                onRegenerate = { viewModel.regenerate(message.id) },
-                                                onDelete = { viewModel.deleteMessage(message.id) },
-                                                onOpenAttachment = { attachment ->
-                                                    openAttachment(context, viewModel, attachment)
-                                                },
-                                                onCopy = { content ->
-                                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                                    clipboard.setPrimaryClip(ClipData.newPlainText("message", content))
-                                                },
-                                            )
-                                        }
-                                    }
-                                }
-                            }
+                    Box(
+                        Modifier
+                            .fillMaxHeight()
+                            .fillMaxWidth(0.88f)
+                            .padding(start = 8.dp, top = 8.dp, bottom = 8.dp)
+                            .frostPanel(RoundedCornerShape(26.dp)),
+                    ) {
+                        ConversationsPanel(
+                            viewModel = viewModel,
+                            onRename = { renaming = it },
+                            onDelete = { deleting = it },
+                        )
+                    }
+                }
+            }
 
-                            ChatHeader(
-                                title = conversation?.title ?: workspace?.name ?: "NitronBox",
-                                modelLabel = model?.displayName ?: strings.noModelSelected,
-                                onOpenConversations = { scope.launch { drawerState.open() } },
-                                onOpenModelPicker = { modelPickerOpen = true },
-                                onNewConversation = viewModel::newConversation,
-                                onOpenSettings = onOpenSettings,
-                                modifier = Modifier
-                                    .align(Alignment.TopCenter)
-                                    .padding(top = statusTop(), start = 14.dp, end = 14.dp),
-                            )
+            if (modelPickerOpen) {
+                ModelPickerSheet(
+                    viewModel = viewModel,
+                    onDismiss = { modelPickerOpen = false },
+                    onOpenSettings = {
+                        modelPickerOpen = false
+                        onOpenSettings()
+                    },
+                )
+            }
 
-                            Composer(
-                                draft = draft,
-                                pendingAttachments = pendingAttachments,
-                                streaming = streaming,
-                                modelLabel = model?.displayName ?: strings.noModelSelected,
-                                contextUsage = contextUsage,
-                                onDraftChange = viewModel::onDraftChange,
-                                onSend = viewModel::send,
-                                onStop = viewModel::stopGeneration,
-                                onPickAttachments = viewModel::addAttachments,
-                                onRemoveAttachment = viewModel::removeAttachment,
-                                onOpenModelPicker = { modelPickerOpen = true },
-                                modifier = Modifier
-                                    .align(Alignment.BottomCenter)
-                                    .navigationBarsPadding()
-                                    .imePadding()
-                                    .padding(start = 14.dp, end = 14.dp, bottom = 10.dp),
-                            )
-                        }
-
-                        AnimatedVisibility(
-                            visible = conversationsOpen,
-                            enter = fadeIn(tween(180)),
-                            exit = fadeOut(tween(180)),
-                        ) {
-                            Box(
-                                Modifier
-                                    .fillMaxSize()
-                                    .background(Color.Black.copy(alpha = 0.45f))
-                                    .clickable { conversationsOpen = false },
-                            )
-                        }
-                        AnimatedVisibility(
-                            visible = conversationsOpen,
-                            enter = slideInHorizontally(tween(260)) { -it } + fadeIn(tween(220)),
-                            exit = slideOutHorizontally(tween(220)) { -it } + fadeOut(tween(180)),
-                        ) {
-                            val statusTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
-                            val navigationBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-                            Box(
-                                Modifier
-                                    .fillMaxSize()
-                                    .padding(top = statusTop, bottom = navigationBottom),
-                            ) {
-                                Box(
-                                    Modifier
-                                        .fillMaxHeight()
-                                        .fillMaxWidth(0.88f)
-                                        .padding(start = 8.dp, top = 8.dp, bottom = 8.dp)
-                                        .frostPanel(RoundedCornerShape(26.dp)),
-                                ) {
-                                    ConversationsPanel(viewModel = viewModel)
-                                }
-                            }
-                        }
-
-                        if (modelPickerOpen) {
-                            ModelPickerSheet(
-                                viewModel = viewModel,
-                                onDismiss = { modelPickerOpen = false },
-                                onOpenSettings = {
-                                    modelPickerOpen = false
-                                    onOpenSettings()
-                                },
-                            )
-                        }
-
-                        renaming?.let { conversation ->
-                            var title by remember(conversation.id) { mutableStateOf(conversation.title) }
-                            NitronCenterDialog(
-                                visible = true,
-                                onDismiss = { renaming = null },
-                                modifier = Modifier.fillMaxWidth(),
-                            ) {
-                                Column(Modifier.padding(18.dp).fillMaxWidth(0.86f)) {
-                                    Text(strings.renameConversation, style = MaterialTheme.typography.titleMedium, color = NitronTheme.colors.textPrimary)
-                                    Spacer(Modifier.height(12.dp))
-                                    TextField(
-                                        value = title,
-                                        onValueChange = { title = it },
-                                        singleLine = true,
-                                        colors = TextFieldDefaults.colors(
-                                            focusedContainerColor = NitronTheme.colors.surfaceMuted,
-                                            unfocusedContainerColor = NitronTheme.colors.surfaceMuted,
-                                            focusedIndicatorColor = Color.Transparent,
-                                            unfocusedIndicatorColor = Color.Transparent,
-                                        ),
-                                    )
-                                    Spacer(Modifier.height(14.dp))
-                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.align(Alignment.End)) {
-                                        TextButtonFlat(strings.cancel) { renaming = null }
-                                        TextButtonFlat(strings.save, enabled = title.isNotBlank(), accent = true) {
-                                            viewModel.renameConversation(conversation.id, title)
-                                            renaming = null
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        deleting?.let { conversation ->
-                            NitronCenterDialog(
-                                visible = true,
-                                onDismiss = { deleting = null },
-                                modifier = Modifier.fillMaxWidth(),
-                            ) {
-                                Column(Modifier.padding(18.dp).fillMaxWidth(0.86f)) {
-                                    Text(strings.deleteConversationTitle, style = MaterialTheme.typography.titleMedium, color = NitronTheme.colors.textPrimary)
-                                    Spacer(Modifier.height(8.dp))
-                                    Text(
-                                        strings.deleteConversationBody(conversation.title),
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = NitronTheme.colors.textSecondary,
-                                    )
-                                    Spacer(Modifier.height(14.dp))
-                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.align(Alignment.End)) {
-                                        TextButtonFlat(strings.cancel) { deleting = null }
-                                        TextButtonFlat(strings.delete, destructive = true) {
-                                            viewModel.deleteConversation(conversation.id)
-                                            deleting = null
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        // Full-screen attachment viewer.
-                        viewModel.viewer.collectAsState().value?.let { view ->
-                            Box(
-                                Modifier
-                                    .fillMaxSize()
-                                    .background(Color.Black.copy(alpha = 0.94f))
-                                    .clickable { viewModel.closeViewer() },
-                            ) {
-                                if (view.attachment.kind == com.nitronbox.app.data.model.AttachmentKind.IMAGE) {
-                                    coil.compose.AsyncImage(
-                                        model = view.attachment.persistedUri,
-                                        contentDescription = view.attachment.displayName,
-                                        contentScale = androidx.compose.ui.layout.ContentScale.Fit,
-                                        modifier = Modifier
-                                            .fillMaxSize()
-                                            .padding(18.dp),
-                                    )
-                                } else {
-                                    Column(
-                                        Modifier
-                                            .fillMaxSize()
-                                            .verticalScroll(rememberScrollState())
-                                            .padding(16.dp),
-                                    ) {
-                                        Text(
-                                            view.attachment.displayName,
-                                            style = MaterialTheme.typography.labelLarge,
-                                            color = NitronTheme.colors.accent,
-                                        )
-                                        Spacer(Modifier.height(10.dp))
-                                        Text(
-                                            view.text ?: "…",
-                                            style = MaterialTheme.typography.bodySmall.copy(fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace),
-                                            color = Color(0xFFDDDDDD),
-                                        )
-                                    }
-                                }
-                                IconButton(
-                                    onClick = { viewModel.closeViewer() },
-                                    modifier = Modifier
-                                        .align(Alignment.TopEnd)
-                                        .padding(top = statusTop(), end = 8.dp),
-                                ) {
-                                    Icon(Icons.Rounded.Close, "Close", tint = Color.White)
-                                }
+            // Rename/delete dialogs live at screen level so they center over everything
+            // and the drawer beneath them blurs.
+            renaming?.let { conversation ->
+                var title by remember(conversation.id) { mutableStateOf(conversation.title) }
+                NitronCenterDialog(visible = true, onDismiss = { renaming = null }, modifier = Modifier.fillMaxSize()) {
+                    Column(Modifier.padding(18.dp).fillMaxWidth(0.86f)) {
+                        Text(strings.renameConversation, style = MaterialTheme.typography.titleMedium, color = NitronTheme.colors.textPrimary)
+                        Spacer(Modifier.height(12.dp))
+                        TextField(
+                            value = title,
+                            onValueChange = { title = it },
+                            singleLine = true,
+                            colors = TextFieldDefaults.colors(
+                                focusedContainerColor = NitronTheme.colors.surfaceMuted,
+                                unfocusedContainerColor = NitronTheme.colors.surfaceMuted,
+                                focusedIndicatorColor = Color.Transparent,
+                                unfocusedIndicatorColor = Color.Transparent,
+                            ),
+                        )
+                        Spacer(Modifier.height(14.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.align(Alignment.End)) {
+                            TextButtonFlat(strings.cancel) { renaming = null }
+                            TextButtonFlat(strings.save, enabled = title.isNotBlank(), accent = true) {
+                                viewModel.renameConversation(conversation.id, title)
+                                renaming = null
                             }
                         }
                     }
                 }
             }
+            deleting?.let { conversation ->
+                NitronCenterDialog(visible = true, onDismiss = { deleting = null }, modifier = Modifier.fillMaxSize()) {
+                    Column(Modifier.padding(18.dp).fillMaxWidth(0.86f)) {
+                        Text(strings.deleteConversationTitle, style = MaterialTheme.typography.titleMedium, color = NitronTheme.colors.textPrimary)
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            strings.deleteConversationBody(conversation.title),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = NitronTheme.colors.textSecondary,
+                        )
+                        Spacer(Modifier.height(14.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.align(Alignment.End)) {
+                            TextButtonFlat(strings.cancel) { deleting = null }
+                            TextButtonFlat(strings.delete, destructive = true) {
+                                viewModel.deleteConversation(conversation.id)
+                                deleting = null
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Full-screen attachment viewer: images fit-to-screen, text files scrollable.
+            viewModel.viewer.collectAsState().value?.let { view ->
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.94f))
+                        .clickable { viewModel.closeViewer() },
+                ) {
+                    if (view.attachment.kind == com.nitronbox.app.data.model.AttachmentKind.IMAGE) {
+                        coil.compose.AsyncImage(
+                            model = view.attachment.persistedUri,
+                            contentDescription = view.attachment.displayName,
+                            contentScale = androidx.compose.ui.layout.ContentScale.Fit,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(18.dp),
+                        )
+                    } else {
+                        Column(
+                            Modifier
+                                .fillMaxSize()
+                                .clickable(enabled = false) {}
+                                .verticalScroll(rememberScrollState())
+                                .padding(16.dp),
+                        ) {
+                            Text(
+                                view.attachment.displayName,
+                                style = MaterialTheme.typography.labelLarge,
+                                color = NitronTheme.colors.accent,
+                            )
+                            Spacer(Modifier.height(10.dp))
+                            Text(
+                                view.text ?: "…",
+                                style = MaterialTheme.typography.bodySmall.copy(fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace),
+                                color = Color(0xFFDDDDDD),
+                            )
+                        }
+                    }
+                    IconButton(
+                        onClick = { viewModel.closeViewer() },
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(top = statusTopForViewer(), end = 8.dp),
+                    ) {
+                        Icon(Icons.Rounded.Close, "Close", tint = Color.White)
+                    }
+                }
+            }
         }
+    }
 }
 
-/** In-app viewer router for attachments; other types open with an external app. */
+@Composable
+private fun statusTopForViewer(): androidx.compose.ui.unit.Dp =
+    WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+
+/** In-app viewer for images and text-like files; other types open with an external app. */
 private fun openAttachment(
     context: android.content.Context,
     viewModel: ChatSessionViewModel,
@@ -480,6 +455,96 @@ private fun openAttachment(
         }
     }
 }
+
+
+/** One rendered tool usage: `action - path`. */
+private data class ToolUsage(val label: String, val start: Int, val end: Int)
+
+/**
+ * Collects every tool usage in a message for display — both compact markers produced by the
+ * service and legacy raw ```tool fences from older messages — and returns the labels plus the
+ * text with all of them removed. Display never shows raw tool JSON.
+ */
+private fun extractToolDisplays(text: String): Pair<List<String>, String> {
+    data class Span(val start: Int, val end: Int, val label: String)
+
+    val spans = mutableListOf<Span>()
+    var cursor = 0
+    while (cursor < text.length) {
+        val fenceIdx = listOf(
+            text.indexOf("```tool", cursor),
+            text.indexOf("```nitron:tool", cursor),
+        ).filter { it >= 0 }.minOrNull() ?: -1
+        val markerIdx = text.indexOf("\u27e6tool\u27e7", cursor)
+
+        val useFence = fenceIdx != -1 && (markerIdx == -1 || fenceIdx < markerIdx)
+        if (useFence) {
+            val jsonStart = text.indexOf('{', fenceIdx)
+            if (jsonStart == -1) break
+            var depth = 0
+            var inString = false
+            var escaped = false
+            var jsonEnd = -1
+            var scan = jsonStart
+            while (scan < text.length) {
+                val ch = text[scan]
+                if (escaped) {
+                    escaped = false
+                } else {
+                    when {
+                        ch == '\\' && inString -> escaped = true
+                        ch == '"' -> inString = !inString
+                        !inString && ch == '{' -> depth++
+                        !inString && ch == '}' -> {
+                            depth--
+                            if (depth == 0) {
+                                jsonEnd = scan
+                                break
+                            }
+                        }
+                    }
+                }
+                scan++
+            }
+            if (jsonEnd == -1) break
+            val json = text.substring(jsonStart, jsonEnd + 1)
+            val parsed = runCatching {
+                val obj = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
+                    .parseToJsonElement(json).jsonObject
+                val action = obj["action"]?.jsonPrimitive?.contentOrNull ?: "tool"
+                val path = obj["path"]?.jsonPrimitive?.contentOrNull
+                action + (path?.let { " \u00b7 $it" } ?: "")
+            }.getOrDefault("tool")
+            val fenceEnd = text.indexOf("```", jsonEnd + 1).let { if (it == -1) text.length else it + 3 }
+            spans.add(Span(fenceIdx, fenceEnd, parsed))
+            cursor = fenceEnd
+        } else if (markerIdx != -1) {
+            val lineEnd = text.indexOf('\n', markerIdx).let { if (it == -1) text.length else it }
+            val label = text.substring(markerIdx, lineEnd)
+                .replace("\u27e6tool\u27e7", "").trim()
+            if (label.isNotBlank()) spans.add(Span(markerIdx, lineEnd, label))
+            cursor = lineEnd
+        } else {
+            break
+        }
+    }
+    if (spans.isEmpty()) return emptyList<String>() to text
+    val sb = StringBuilder()
+    var pos = 0
+    val labels = mutableListOf<String>()
+    spans.sortedBy { it.start }.forEach { span ->
+        if (span.start < pos) return@forEach // overlap guard
+        sb.append(text.substring(pos, span.start))
+        labels.add(span.label)
+        pos = span.end
+    }
+    sb.append(text.substring(pos))
+    return labels to sb.toString().replace("\n{3,}", "\n\n").trimStart()
+}
+
+@Composable
+private fun statusTopForHeader(): androidx.compose.ui.unit.Dp =
+    WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
 
 @Composable
 private fun ChatHeader(
@@ -539,35 +604,38 @@ private fun WelcomeCard(
     onConfigureModels: () -> Unit,
 ) {
     val strings = LocalStrings.current
-    FrostSurface(NitronTheme.shapes.large, Modifier.fillMaxWidth()) {
-        Column(Modifier.fillMaxWidth().padding(20.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                SpinningLogo(size = 44.dp)
-                Spacer(Modifier.padding(6.dp))
-                Text(strings.welcomeTitle, style = MaterialTheme.typography.headlineMedium, color = NitronTheme.colors.textPrimary)
-            }
-            Spacer(Modifier.height(8.dp))
-            Text(
-                strings.welcomeBody(workspaceName),
-                style = MaterialTheme.typography.bodyMedium,
-                color = NitronTheme.colors.textSecondary,
-            )
-            AnimatedVisibility(!modelConfigured, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
-                Column {
-                    Spacer(Modifier.height(14.dp))
-                    Text(
-                        strings.welcomeNoModel,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = NitronTheme.colors.textSecondary,
-                    )
-                    Spacer(Modifier.height(10.dp))
-                    Text(
-                        strings.openSettings,
-                        style = MaterialTheme.typography.labelLarge,
-                        color = NitronTheme.colors.accent,
-                        modifier = Modifier.pressableRipple(shape = NitronTheme.shapes.small, onClick = onConfigureModels),
-                    )
-                }
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .frostPanel(NitronTheme.shapes.large)
+            .padding(20.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            SpinningLogo(size = 44.dp)
+            Spacer(Modifier.padding(6.dp))
+            Text(strings.welcomeTitle, style = MaterialTheme.typography.headlineMedium, color = NitronTheme.colors.textPrimary)
+        }
+        Spacer(Modifier.height(8.dp))
+        Text(
+            strings.welcomeBody(workspaceName),
+            style = MaterialTheme.typography.bodyMedium,
+            color = NitronTheme.colors.textSecondary,
+        )
+        AnimatedVisibility(!modelConfigured, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
+            Column {
+                Spacer(Modifier.height(14.dp))
+                Text(
+                    strings.welcomeNoModel,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = NitronTheme.colors.textSecondary,
+                )
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    strings.openSettings,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = NitronTheme.colors.accent,
+                    modifier = Modifier.pressableRipple(shape = NitronTheme.shapes.small, onClick = onConfigureModels),
+                )
             }
         }
     }
@@ -595,192 +663,194 @@ private fun MessageBubble(
         Modifier.fillMaxWidth(),
         horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start,
     ) {
-        FrostSurface(
-            NitronTheme.shapes.large,
+        Column(
             Modifier
                 .widthIn(max = 640.dp)
-                .fillMaxWidth(if (isUser) 0.85f else 0.96f),
+                .fillMaxWidth(if (isUser) 0.85f else 0.96f)
+                .then(
+                    // Same frosted material for both roles — one color, real backdrop blur.
+                    Modifier.frostPanel(NitronTheme.shapes.large),
+                )
+                .combinedClickable(
+                    onClick = {},
+                    onLongClick = { actionsOpen = true },
+                )
+                .padding(horizontal = 15.dp, vertical = 12.dp),
         ) {
-            Column(
-                Modifier
-                    .combinedClickable(
-                        onClick = {},
-                        onLongClick = { actionsOpen = true },
-                    )
-                    .padding(horizontal = 15.dp, vertical = 12.dp),
-            ) {
-                if (message.status == MessageStatus.FAILED) {
-                    Text(
-                        strings.generationFailed,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = NitronTheme.colors.destructive,
-                    )
-                    Spacer(Modifier.height(6.dp))
+            if (message.status == MessageStatus.FAILED) {
+                Text(
+                    strings.generationFailed,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = NitronTheme.colors.destructive,
+                )
+                Spacer(Modifier.height(6.dp))
+            }
+            if (isUser) {
+                Text(message.content, style = MaterialTheme.typography.bodyLarge, color = NitronTheme.colors.textPrimary)
+            } else {
+                if (!message.reasoning.isNullOrBlank()) {
+                    var reasoningOpen by remember(message.id) { mutableStateOf(false) }
+                    Row(
+                        Modifier
+                            .pressableRipple(shape = NitronTheme.shapes.small) { reasoningOpen = !reasoningOpen }
+                            .padding(vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            (if (reasoningOpen) "▾ " else "▸ ") + strings.thinking,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = NitronTheme.colors.textTertiary,
+                        )
+                    }
+                    AnimatedVisibility(visible = reasoningOpen) {
+                        Text(
+                            message.reasoning!!,
+                            style = MaterialTheme.typography.bodySmall.copy(fontStyle = androidx.compose.ui.text.font.FontStyle.Italic),
+                            color = NitronTheme.colors.textSecondary,
+                            modifier = Modifier.padding(top = 6.dp, start = 2.dp),
+                        )
+                    }
+                    Spacer(Modifier.height(8.dp))
                 }
-                if (isUser) {
-                    Text(message.content, style = MaterialTheme.typography.bodyLarge, color = NitronTheme.colors.textPrimary)
+                if (message.content.isEmpty() && message.status == MessageStatus.STREAMING) {
+                    StreamingDots(strings.thinking)
                 } else {
-                    if (!message.reasoning.isNullOrBlank()) {
-                        var reasoningOpen by remember(message.id) { mutableStateOf(false) }
-                        Row(
-                            Modifier
-                                .pressableRipple(shape = NitronTheme.shapes.small) { reasoningOpen = !reasoningOpen }
-                                .padding(vertical = 2.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text(
-                                (if (reasoningOpen) "▾ " else "▸ ") + strings.thinking,
-                                style = MaterialTheme.typography.labelMedium,
-                                color = NitronTheme.colors.textTertiary,
-                            )
-                        }
-                        AnimatedVisibility(visible = reasoningOpen) {
-                            Text(
-                                message.reasoning!!,
-                                style = MaterialTheme.typography.bodySmall.copy(fontStyle = androidx.compose.ui.text.font.FontStyle.Italic),
-                                color = NitronTheme.colors.textSecondary,
-                                modifier = Modifier.padding(top = 6.dp, start = 2.dp),
-                            )
+                    val extraction = remember(message.content) { extractToolDisplays(message.content) }
+                    val toolLines = extraction.first
+                    val markdownText = extraction.second
+                    if (toolLines.isNotEmpty()) {
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            toolLines.forEach { line ->
+                                val label = line.trimStart().removePrefix("\u27e6tool\u27e7 ").trim()
+                                Row(
+                                    Modifier
+                                        .nitronSurface(SurfaceLevel.Muted, NitronTheme.shapes.pill)
+                                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Icon(
+                                        Icons.Rounded.Build,
+                                        null,
+                                        tint = NitronTheme.colors.accent,
+                                        modifier = Modifier.size(14.dp),
+                                    )
+                                    Spacer(Modifier.padding(3.dp))
+                                    Text(
+                                        label,
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = NitronTheme.colors.textPrimary,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
+                            }
                         }
                         Spacer(Modifier.height(8.dp))
                     }
-                    if (message.content.isEmpty() && message.status == MessageStatus.STREAMING) {
-                        StreamingDots(strings.thinking)
-                    } else {
-                        val extraction = remember(message.content) { extractToolDisplays(message.content) }
-                        val toolLines = extraction.first
-                        val markdownText = extraction.second
-                        if (toolLines.isNotEmpty()) {
-                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                toolLines.forEach { label ->
-                                    Row(
-                                        Modifier
-                                            .nitronSurface(SurfaceLevel.Muted, NitronTheme.shapes.pill)
-                                            .padding(horizontal = 10.dp, vertical = 6.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                    ) {
-                                        Icon(
-                                            Icons.Rounded.Build,
-                                            null,
-                                            tint = NitronTheme.colors.accent,
-                                            modifier = Modifier.size(14.dp),
-                                        )
-                                        Spacer(Modifier.padding(3.dp))
-                                        Text(
-                                            label,
-                                            style = MaterialTheme.typography.labelMedium,
-                                            color = NitronTheme.colors.textPrimary,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis,
-                                        )
-                                    }
+                    MarkdownRenderer(
+                        markdown = message.content + if (message.status == MessageStatus.STREAMING) " ▍" else "",
+                        onLinkClick = { url ->
+                            runCatching {
+                                val uri = Uri.parse(url)
+                                if (uri.scheme in setOf("http", "https")) {
+                                    context.startActivity(Intent(Intent.ACTION_VIEW, uri))
                                 }
                             }
-                            Spacer(Modifier.height(8.dp))
-                        }
-                        MarkdownRenderer(
-                            markdown = markdownText + if (message.status == MessageStatus.STREAMING) " ▍" else "",
-                            onLinkClick = { url ->
-                                runCatching {
-                                    val uri = Uri.parse(url)
-                                    if (uri.scheme in setOf("http", "https")) {
-                                        context.startActivity(Intent(Intent.ACTION_VIEW, uri))
-                                    }
-                                }
-                            },
-                        )
-                    }
-                }
-                AnimatedVisibility(message.attachments.isNotEmpty()) {
-                    Column {
-                        message.attachments.forEach { attachment ->
-                            Spacer(Modifier.height(8.dp))
-                            if (attachment.kind == com.nitronbox.app.data.model.AttachmentKind.IMAGE) {
-                                coil.compose.AsyncImage(
-                                    model = attachment.persistedUri,
-                                    contentDescription = attachment.displayName,
-                                    contentScale = androidx.compose.ui.layout.ContentScale.Crop,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .heightIn(max = 220.dp)
-                                        .clip(NitronTheme.shapes.medium)
-                                        .combinedClickable(
-                                            onClick = { onOpenAttachment(attachment) },
-                                            onLongClick = { copyText() },
-                                        ),
-                                )
-                                Spacer(Modifier.height(4.dp))
-                                Text(
-                                    "${attachment.displayName}  ·  ${formatBytes(attachment.byteSize)}",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = NitronTheme.colors.textTertiary,
-                                )
-                            } else {
-                                AttachmentChip(attachment.displayName, attachment.byteSize) {
-                                    onOpenAttachment(attachment)
-                                }
-                            }
-                        }
-                    }
-                }
-                if (message.status == MessageStatus.FAILED && message.errorText != null) {
-                    Spacer(Modifier.height(6.dp))
-                    Text(
-                        message.errorText,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = NitronTheme.colors.textSecondary,
+                        },
                     )
                 }
-                if (message.status != MessageStatus.STREAMING) {
-                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                        val stats = statsLine(message)
-                        if (stats != null) {
+            }
+            AnimatedVisibility(message.attachments.isNotEmpty()) {
+                Column {
+                    message.attachments.forEach { attachment ->
+                        Spacer(Modifier.height(8.dp))
+                        if (attachment.kind == com.nitronbox.app.data.model.AttachmentKind.IMAGE) {
+                            // Inline preview: tap to open the full-screen viewer.
+                            coil.compose.AsyncImage(
+                                model = attachment.persistedUri,
+                                contentDescription = attachment.displayName,
+                                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(max = 220.dp)
+                                    .clip(NitronTheme.shapes.medium)
+                                    .combinedClickable(
+                                        onClick = { onOpenAttachment(attachment) },
+                                        onLongClick = { copyText() },
+                                    ),
+                            )
+                            Spacer(Modifier.height(4.dp))
                             Text(
-                                stats,
+                                "${attachment.displayName}  ·  ${formatBytes(attachment.byteSize)}",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = NitronTheme.colors.textTertiary,
-                                modifier = Modifier.weight(1f),
                             )
                         } else {
-                            Spacer(Modifier.weight(1f))
+                            AttachmentChip(attachment.displayName, attachment.byteSize) {
+                                onOpenAttachment(attachment)
+                            }
                         }
-                        Box(contentAlignment = Alignment.CenterEnd) {
-                            DropdownMenu(expanded = actionsOpen, onDismissRequest = { actionsOpen = false }) {
+                    }
+                }
+            }
+            if (message.status == MessageStatus.FAILED && message.errorText != null) {
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    message.errorText,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = NitronTheme.colors.textSecondary,
+                )
+            }
+            if (message.status != MessageStatus.STREAMING) {
+                // Stats on the left, the ⋯ actions button right after them.
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                    val stats = statsLine(message)
+                    if (stats != null) {
+                        Text(
+                            stats,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = NitronTheme.colors.textTertiary,
+                            modifier = Modifier.weight(1f),
+                        )
+                    } else {
+                        Spacer(Modifier.weight(1f))
+                    }
+                    Box(contentAlignment = Alignment.CenterEnd) {
+                        DropdownMenu(expanded = actionsOpen, onDismissRequest = { actionsOpen = false }) {
+                            DropdownMenuItem(
+                                text = { Text(strings.copyText) },
+                                onClick = {
+                                    actionsOpen = false
+                                    copyText()
+                                },
+                            )
+                            if (!isUser) {
                                 DropdownMenuItem(
-                                    text = { Text(strings.copyText) },
+                                    text = { Text(if (message.status == MessageStatus.FAILED) strings.retry else strings.regenerate) },
                                     onClick = {
                                         actionsOpen = false
-                                        copyText()
-                                    },
-                                )
-                                if (!isUser) {
-                                    DropdownMenuItem(
-                                        text = { Text(if (message.status == MessageStatus.FAILED) strings.retry else strings.regenerate) },
-                                        onClick = {
-                                            actionsOpen = false
-                                            onRegenerate()
-                                        },
-                                    )
-                                }
-                                DropdownMenuItem(
-                                    text = { Text(strings.deleteMessage, color = NitronTheme.colors.destructive) },
-                                    onClick = {
-                                        actionsOpen = false
-                                        onDelete()
+                                        onRegenerate()
                                     },
                                 )
                             }
-                            IconButton(
-                                onClick = { actionsOpen = true },
-                                modifier = Modifier.size(32.dp),
-                            ) {
-                                Icon(
-                                    Icons.Rounded.MoreVert,
-                                    strings.conversationActions,
-                                    tint = NitronTheme.colors.textTertiary,
-                                    modifier = Modifier.size(16.dp),
-                                )
-                            }
+                            DropdownMenuItem(
+                                text = { Text(strings.deleteMessage, color = NitronTheme.colors.destructive) },
+                                onClick = {
+                                    actionsOpen = false
+                                    onDelete()
+                                },
+                            )
+                        }
+                        IconButton(
+                            onClick = { actionsOpen = true },
+                            modifier = Modifier.size(32.dp),
+                        ) {
+                            Icon(
+                                Icons.Rounded.MoreVert,
+                                strings.conversationActions,
+                                tint = NitronTheme.colors.textTertiary,
+                                modifier = Modifier.size(16.dp),
+                            )
                         }
                     }
                 }
@@ -917,6 +987,7 @@ private fun Composer(
                     modifier = Modifier.size(20.dp),
                 )
             }
+            // Model selector lives next to the attach button, always one tap away.
             Row(
                 Modifier
                     .weight(1f, fill = false)
@@ -1008,89 +1079,3 @@ internal fun formatBytes(bytes: Long): String = when {
     bytes >= 1_024 -> "%.0f KB".format(bytes / 1_024.0)
     else -> "$bytes B"
 }
-
-/**
- * Collects every tool usage in a message for display — both compact markers produced by the
- * service and legacy raw tool fences from older messages — and returns the labels plus the
- * text with all of them removed. Display never shows raw tool JSON.
- */
-private fun extractToolDisplays(text: String): Pair<List<String>, String> {
-    data class Span(val start: Int, val end: Int, val label: String)
-
-    val spans = mutableListOf<Span>()
-    var cursor = 0
-    while (cursor < text.length) {
-        val fenceIdx = listOf(
-            text.indexOf("```tool", cursor),
-            text.indexOf("```nitron:tool", cursor),
-        ).filter { it >= 0 }.minOrNull() ?: -1
-        val markerIdx = text.indexOf("\u27e6tool\u27e7", cursor)
-
-        val useFence = fenceIdx != -1 && (markerIdx == -1 || fenceIdx < markerIdx)
-        if (useFence) {
-            val jsonStart = text.indexOf('{', fenceIdx)
-            if (jsonStart == -1) break
-            var depth = 0
-            var inString = false
-            var escaped = false
-            var jsonEnd = -1
-            var scan = jsonStart
-            while (scan < text.length) {
-                val ch = text[scan]
-                if (escaped) {
-                    escaped = false
-                } else {
-                    when {
-                        ch == '\\' && inString -> escaped = true
-                        ch == '"' -> inString = !inString
-                        !inString && ch == '{' -> depth++
-                        !inString && ch == '}' -> {
-                            depth--
-                            if (depth == 0) {
-                                jsonEnd = scan
-                                break
-                            }
-                        }
-                    }
-                }
-                scan++
-            }
-            if (jsonEnd == -1) break
-            val json = text.substring(jsonStart, jsonEnd + 1)
-            val parsed = runCatching {
-                val obj = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
-                    .parseToJsonElement(json).jsonObject
-                val action = obj["action"]?.jsonPrimitive?.contentOrNull ?: "tool"
-                val path = obj["path"]?.jsonPrimitive?.contentOrNull
-                action + (path?.let { " \u00b7 $it" } ?: "")
-            }.getOrDefault("tool")
-            val fenceEnd = text.indexOf("```", jsonEnd + 1).let { if (it == -1) text.length else it + 3 }
-            spans.add(Span(fenceIdx, fenceEnd, parsed))
-            cursor = fenceEnd
-        } else if (markerIdx != -1) {
-            val lineEnd = text.indexOf('\n', markerIdx).let { if (it == -1) text.length else it }
-            val label = text.substring(markerIdx, lineEnd)
-                .replace("\u27e6tool\u27e7", "").trim()
-            if (label.isNotBlank()) spans.add(Span(markerIdx, lineEnd, label))
-            cursor = lineEnd
-        } else {
-            break
-        }
-    }
-    if (spans.isEmpty()) return emptyList<String>() to text
-    val sb = StringBuilder()
-    var pos = 0
-    val labels = mutableListOf<String>()
-    spans.sortedBy { it.start }.forEach { span ->
-        if (span.start < pos) return@forEach
-        sb.append(text.substring(pos, span.start))
-        labels.add(span.label)
-        pos = span.end
-    }
-    sb.append(text.substring(pos))
-    return labels to sb.toString().replace("\n{3,}", "\n\n").trimStart()
-}
-
-@Composable
-private fun statusTop(): androidx.compose.ui.unit.Dp =
-    WindowInsets.statusBars.asPaddingValues().calculateTopPadding()

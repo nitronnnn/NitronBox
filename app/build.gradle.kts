@@ -23,8 +23,8 @@ android {
         applicationId = "com.nitronbox.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 16
-        versionName = "9.5.5"
+        versionCode = 15
+        versionName = "9.5.4"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true

@@ -62,10 +62,9 @@ class ChatService(
         conversationId: String?,
         text: String,
         attachments: List<AttachmentReference>,
-        folderUri: String? = null,
     ): PreparedUserMessage {
         val resolvedConversationId = conversationId
-            ?: repository.createConversation(workspace.id, deriveTitle(text), folderUri).id
+            ?: repository.createConversation(workspace.id, deriveTitle(text)).id
         // A freshly created empty conversation gets a real title from its first message.
         if (text.isNotBlank()) {
             repository.conversation(resolvedConversationId)?.let { conversation ->
