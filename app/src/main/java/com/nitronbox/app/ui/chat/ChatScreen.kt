@@ -582,7 +582,7 @@ private fun MessageBubble(
                     if (isUser) {
                         Modifier.background(NitronTheme.colors.userBubble, NitronTheme.shapes.large)
                     } else {
-                        Modifier.frostPanel(NitronTheme.shapes.large)
+                        Modifier.nitronSurface(SurfaceLevel.Raised, NitronTheme.shapes.large)
                     },
                 )
                 .combinedClickable(

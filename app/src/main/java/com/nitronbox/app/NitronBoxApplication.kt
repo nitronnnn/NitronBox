@@ -25,12 +25,26 @@ class NitronBoxApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
-        // Persist stack traces so crash reports survive the process death.
+        // Persist stack traces so crash reports survive the process death, and mirror
+        // them into public Downloads so they can be shared without adb.
         val previous = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, error ->
+            val trace = android.util.Log.getStackTraceString(error)
+            runCatching { java.io.File(filesDir, "last_crash.txt").writeText(trace) }
             runCatching {
-                java.io.File(filesDir, "last_crash.txt")
-                    .writeText(android.util.Log.getStackTraceString(error))
+                val values = android.content.ContentValues().apply {
+                    put(android.provider.MediaStore.Downloads.DISPLAY_NAME, "nitronbox_last_crash.txt")
+                    put(android.provider.MediaStore.Downloads.MIME_TYPE, "text/plain")
+                }
+                val uri = contentResolver.insert(
+                    android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+                    values,
+                )
+                uri?.let { resolver ->
+                    contentResolver.openOutputStream(resolver)?.use { output ->
+                        output.write(trace.encodeToByteArray())
+                    }
+                }
             }
             previous?.uncaughtException(thread, error)
         }
