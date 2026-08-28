@@ -94,6 +94,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -168,6 +170,19 @@ fun ChatScreen(
             label = "blurProgress",
         )
         val blurRadius = if (fx.blurEnabled) fx.blurRadius.dp else 0.dp
+        var wallpaperTop by remember { mutableStateOf(0f) }
+        val listState = rememberLazyListState()
+        val parallax by remember {
+            androidx.compose.runtime.derivedStateOf {
+                (listState.firstVisibleItemIndex * 800 + listState.firstVisibleItemScrollOffset).toFloat()
+            }
+        }
+        val wallpaperGeometry = WallpaperGeometry(
+            preset = wallpaper,
+            imageUri = wallpaperImageUri,
+            top = wallpaperTop,
+            parallax = parallax * 0.12f,
+        )
 
         Box(
             Modifier
@@ -175,22 +190,20 @@ fun ChatScreen(
                 .fillMaxSize()
                 .background(NitronTheme.colors.background),
         ) {
+            androidx.compose.runtime.CompositionLocalProvider(
+                LocalWallpaperGeometry provides wallpaperGeometry,
+            ) {
             // Content is the haze source; frosted surfaces above blur it for real.
             // The content itself also blurs while an overlay is open.
             Box(Modifier.fillMaxSize().blur(blurRadius * blurProgress)) {
-            val listState = rememberLazyListState()
-            // Parallax: the wallpaper trails the scroll for depth.
-            val parallax by remember {
-                androidx.compose.runtime.derivedStateOf {
-                    (listState.firstVisibleItemIndex * 800 + listState.firstVisibleItemScrollOffset).toFloat()
-                }
-            }
             Box(Modifier.fillMaxSize().hazeSource(hazeState)) {
                 WallpaperBackdrop(
                     wallpaper,
                     wallpaperImageUri,
                     Modifier
                         .matchParentSize()
+                        .blur(fx.blurRadius.dp)
+                        .onGloballyPositioned { wallpaperTop = it.positionInRoot().y }
                         .graphicsLayer { translationY = parallax * 0.12f },
                 )
                 Column(Modifier.fillMaxSize()) {
@@ -425,6 +438,7 @@ fun ChatScreen(
                 }
             }
         }
+    }
     }
 }
 
