@@ -25,6 +25,15 @@ class NitronBoxApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        // Persist stack traces so crash reports survive the process death.
+        val previous = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { thread, error ->
+            runCatching {
+                java.io.File(filesDir, "last_crash.txt")
+                    .writeText(android.util.Log.getStackTraceString(error))
+            }
+            previous?.uncaughtException(thread, error)
+        }
         // Installs current TLS providers on API 26 devices when Play Services is available.
         ProviderInstaller.installIfNeededAsync(
             this,

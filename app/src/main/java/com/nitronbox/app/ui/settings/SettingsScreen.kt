@@ -417,6 +417,7 @@ fun SettingsScreen(
             onSelect = viewModel::setWallpaper,
             galleryImages = galleryImages,
             onPickFromGallery = { uri -> viewModel.setWallpaperImage(android.net.Uri.parse(uri)) },
+            onRefreshGallery = viewModel::loadGallery,
             onDismiss = { wallpaperOpen = false },
         )
     }
@@ -522,10 +523,28 @@ private fun WallpaperPanel(
     galleryImages: List<String>,
     onSelect: (com.nitronbox.app.data.settings.WallpaperPreset) -> Unit,
     onPickFromGallery: (String) -> Unit,
+    onRefreshGallery: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     val strings = LocalStrings.current
     var showGallery by remember { mutableStateOf(false) }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val permissionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestPermission(),
+    ) { granted -> if (granted) onRefreshGallery() }
+    val openGallery: () -> Unit = {
+        val permission = if (android.os.Build.VERSION.SDK_INT >= 33) {
+            android.Manifest.permission.READ_MEDIA_IMAGES
+        } else {
+            android.Manifest.permission.READ_EXTERNAL_STORAGE
+        }
+        val granted = androidx.core.content.ContextCompat.checkSelfPermission(
+            context,
+            permission,
+        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        if (granted) onRefreshGallery() else permissionLauncher.launch(permission)
+        showGallery = true
+    }
     val presets = listOf(
         com.nitronbox.app.data.settings.WallpaperPreset.NONE,
         com.nitronbox.app.data.settings.WallpaperPreset.LOGO,
@@ -589,7 +608,7 @@ private fun WallpaperPanel(
                                         Modifier.border(1.dp, NitronTheme.colors.border, NitronTheme.shapes.small)
                                     },
                                 )
-                                .pressableRipple(shape = NitronTheme.shapes.small, onClick = { showGallery = true }),
+                                .pressableRipple(shape = NitronTheme.shapes.small, onClick = openGallery),
                             contentAlignment = Alignment.Center,
                         ) {
                             if (isSelected && imageUri != null) {
