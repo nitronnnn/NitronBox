@@ -83,6 +83,9 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
     val blurredPanels: StateFlow<Boolean> = container.appSettings.blurredPanels
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
 
+    val panelBlurStrength: StateFlow<Float> = container.appSettings.panelBlurStrength
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 24f)
+
     fun setBlurEnabled(enabled: Boolean) {
         viewModelScope.launch { container.appSettings.setBlurEnabled(enabled) }
     }
@@ -93,6 +96,10 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
 
     fun setBlurredPanels(enabled: Boolean) {
         viewModelScope.launch { container.appSettings.setBlurredPanels(enabled) }
+    }
+
+    fun setPanelBlurStrength(strength: Float) {
+        viewModelScope.launch { container.appSettings.setPanelBlurStrength(strength) }
     }
 
     private val _galleryImages = MutableStateFlow<List<String>>(emptyList())

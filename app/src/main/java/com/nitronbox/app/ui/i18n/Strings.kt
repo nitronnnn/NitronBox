@@ -95,6 +95,7 @@ data class Strings(
     val blurBackground: String,
     val blurredPanels: String,
     val strength: String,
+    val panelStrength: String,
 )
 
 val EnglishStrings = Strings(
@@ -184,6 +185,7 @@ val EnglishStrings = Strings(
     blurBackground = "Background blur",
     blurredPanels = "Frosted panels",
     strength = "Strength",
+    panelStrength = "Panel blur strength",
 )
 
 val RussianStrings = Strings(
@@ -273,6 +275,7 @@ val RussianStrings = Strings(
     blurBackground = "Блюр фона",
     blurredPanels = "Блюренные панели",
     strength = "Сила",
+    panelStrength = "Сила блюра панелей",
 )
 
 val LocalStrings = compositionLocalOf { EnglishStrings }

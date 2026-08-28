@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
@@ -33,6 +34,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
+import dev.chrisbanes.haze.HazeStyle
 import dev.chrisbanes.haze.HazeTint
 import dev.chrisbanes.haze.hazeEffect
 import androidx.compose.ui.draw.clip
@@ -71,17 +73,20 @@ fun Modifier.frostPanel(shape: androidx.compose.ui.graphics.Shape): Modifier {
     val fx = LocalUiFx.current
     val state = LocalHazeState.current
     val surfaceColor = NitronTheme.colors.background
-    val tintColor = surfaceColor.copy(alpha = 0.78f)
-    val radius = fx.blurRadius.dp
+    val tintColor = surfaceColor.copy(alpha = 0.72f)
+    val radius = fx.panelBlurRadius.dp
     val base = if (fx.blurredPanels && fx.blurEnabled && state != null) {
-        Modifier.hazeEffect(state) {
-            backgroundColor = surfaceColor
-            tints = listOf(HazeTint(tintColor))
-            blurRadius = radius
-            noiseFactor = 0f
-        }
+        Modifier.hazeEffect(
+            state = state,
+            style = HazeStyle(
+                backgroundColor = surfaceColor,
+                tints = listOf(HazeTint(tintColor)),
+                blurRadius = radius,
+                noiseFactor = 0f,
+            ),
+        )
     } else {
-        Modifier.background(NitronTheme.colors.background)
+        Modifier.background(surfaceColor)
     }
     return clip(shape).then(base).pointerInput(Unit) {}
 }
@@ -138,6 +143,7 @@ fun NitronCenterDialog(
     ) {
         Box(
             Modifier
+                .wrapContentSize(Alignment.Center)
                 .padding(horizontal = 32.dp)
                 .imePadding()
                 .frostPanel(NitronTheme.shapes.large),
