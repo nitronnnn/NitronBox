@@ -52,7 +52,7 @@ class ChatRepository(
 
     // --- Conversations ---
 
-    suspend fun createConversation(workspaceId: String, title: String): ConversationEntity {
+    suspend fun createConversation(workspaceId: String, title: String, folderUri: String? = null): ConversationEntity {
         val now = System.currentTimeMillis()
         val conversation = ConversationEntity(
             id = newId(),
@@ -60,6 +60,7 @@ class ChatRepository(
             title = title.ifBlank { DEFAULT_TITLE },
             createdAtEpochMillis = now,
             updatedAtEpochMillis = now,
+            folderUri = folderUri,
         )
         dao.upsertConversation(conversation)
         return conversation

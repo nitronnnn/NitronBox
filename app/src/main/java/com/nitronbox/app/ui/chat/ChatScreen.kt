@@ -33,6 +33,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -49,6 +50,10 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.draw.clip
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.ArrowUpward
@@ -96,6 +101,7 @@ import com.nitronbox.app.data.model.ChatMessage
 import com.nitronbox.app.data.model.MessageRole
 import com.nitronbox.app.data.model.MessageStatus
 import com.nitronbox.app.ui.components.ConversationsPanel
+import com.nitronbox.app.ui.components.SpinningLogo
 import com.nitronbox.app.ui.components.ModelPickerSheet
 import com.nitronbox.app.ui.chat.components.MarkdownRenderer
 import com.nitronbox.app.ui.i18n.LocalStrings
@@ -152,9 +158,9 @@ fun ChatScreen(
                 .fillMaxSize()
                 .background(NitronTheme.colors.background),
         ) {
-            WallpaperBackdrop(wallpaper, wallpaperImageUri, Modifier.matchParentSize())
-
-            Box(Modifier.fillMaxSize().then(Modifier.blur(18.dp * blurProgress))) {
+            // Everything beneath the overlays blurs together: wallpaper, chat, composer.
+            Box(Modifier.fillMaxSize().blur(18.dp * blurProgress)) {
+                WallpaperBackdrop(wallpaper, wallpaperImageUri, Modifier.matchParentSize())
                 Column(Modifier.fillMaxSize()) {
                     val statusTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
 
@@ -203,6 +209,7 @@ fun ChatScreen(
                                     message = message,
                                     onRegenerate = { viewModel.regenerate(message.id) },
                                     onDelete = { viewModel.deleteMessage(message.id) },
+                                    onOpenAttachment = { attachment -> openAttachment(context, viewModel, attachment) },
                                     onCopy = { content ->
                                         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                                         clipboard.setPrimaryClip(ClipData.newPlainText("message", content))
@@ -261,8 +268,9 @@ fun ChatScreen(
                     Box(
                         Modifier
                             .fillMaxHeight()
-                            .fillMaxWidth(0.86f)
-                            .nitronSurface(SurfaceLevel.Overlay, RectangleShape),
+                            .fillMaxWidth(0.88f)
+                            .padding(start = 8.dp, top = 8.dp, bottom = 8.dp)
+                            .nitronSurface(SurfaceLevel.Overlay, RoundedCornerShape(26.dp)),
                     ) {
                         ConversationsPanel(viewModel = viewModel)
                     }
@@ -279,6 +287,86 @@ fun ChatScreen(
                     },
                 )
             }
+
+            // Full-screen attachment viewer: images fit-to-screen, text files scrollable.
+            viewModel.viewer.collectAsState().value?.let { view ->
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.94f))
+                        .clickable { viewModel.closeViewer() },
+                ) {
+                    if (view.attachment.kind == com.nitronbox.app.data.model.AttachmentKind.IMAGE) {
+                        coil.compose.AsyncImage(
+                            model = view.attachment.persistedUri,
+                            contentDescription = view.attachment.displayName,
+                            contentScale = androidx.compose.ui.layout.ContentScale.Fit,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(18.dp),
+                        )
+                    } else {
+                        Column(
+                            Modifier
+                                .fillMaxSize()
+                                .clickable(enabled = false) {}
+                                .verticalScroll(rememberScrollState())
+                                .padding(16.dp),
+                        ) {
+                            Text(
+                                view.attachment.displayName,
+                                style = MaterialTheme.typography.labelLarge,
+                                color = NitronTheme.colors.accent,
+                            )
+                            Spacer(Modifier.height(10.dp))
+                            Text(
+                                view.text ?: "…",
+                                style = MaterialTheme.typography.bodySmall.copy(fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace),
+                                color = Color(0xFFDDDDDD),
+                            )
+                        }
+                    }
+                    IconButton(
+                        onClick = { viewModel.closeViewer() },
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(top = statusTopForViewer(), end = 8.dp),
+                    ) {
+                        Icon(Icons.Rounded.Close, "Close", tint = Color.White)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun statusTopForViewer(): androidx.compose.ui.unit.Dp =
+    WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+
+/** In-app viewer for images and text-like files; other types open with an external app. */
+private fun openAttachment(
+    context: android.content.Context,
+    viewModel: ChatSessionViewModel,
+    attachment: com.nitronbox.app.data.model.AttachmentReference,
+) {
+    when (attachment.kind) {
+        com.nitronbox.app.data.model.AttachmentKind.IMAGE ->
+            viewModel.openAttachment(attachment, loadText = false)
+        com.nitronbox.app.data.model.AttachmentKind.TEXT,
+        com.nitronbox.app.data.model.AttachmentKind.CSV,
+        com.nitronbox.app.data.model.AttachmentKind.JSON,
+        com.nitronbox.app.data.model.AttachmentKind.CODE,
+        -> viewModel.openAttachment(attachment, loadText = true)
+        else -> {
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(Uri.parse(attachment.persistedUri), attachment.mimeType)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            runCatching { context.startActivity(intent) }
+                .onFailure {
+                    android.widget.Toast.makeText(context, "No app can open this file", android.widget.Toast.LENGTH_SHORT).show()
+                }
         }
     }
 }
@@ -346,7 +434,11 @@ private fun WelcomeCard(
             .nitronSurface(SurfaceLevel.Raised, NitronTheme.shapes.large)
             .padding(20.dp),
     ) {
-        Text(strings.welcomeTitle, style = MaterialTheme.typography.headlineMedium, color = NitronTheme.colors.textPrimary)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            SpinningLogo(size = 44.dp)
+            Spacer(Modifier.padding(6.dp))
+            Text(strings.welcomeTitle, style = MaterialTheme.typography.headlineMedium, color = NitronTheme.colors.textPrimary)
+        }
         Spacer(Modifier.height(8.dp))
         Text(
             strings.welcomeBody(workspaceName),
@@ -378,6 +470,7 @@ private fun MessageBubble(
     message: ChatMessage,
     onRegenerate: () -> Unit,
     onDelete: () -> Unit,
+    onOpenAttachment: (com.nitronbox.app.data.model.AttachmentReference) -> Unit,
     onCopy: (String) -> Unit,
 ) {
     val strings = LocalStrings.current
@@ -441,12 +534,36 @@ private fun MessageBubble(
             AnimatedVisibility(message.attachments.isNotEmpty()) {
                 Column {
                     message.attachments.forEach { attachment ->
-                        Spacer(Modifier.height(6.dp))
-                        AttachmentChip(attachment.displayName, attachment.byteSize, onRemove = null)
+                        Spacer(Modifier.height(8.dp))
+                        if (attachment.kind == com.nitronbox.app.data.model.AttachmentKind.IMAGE) {
+                            // Inline preview: tap to open the full-screen viewer.
+                            coil.compose.AsyncImage(
+                                model = attachment.persistedUri,
+                                contentDescription = attachment.displayName,
+                                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(max = 220.dp)
+                                    .clip(NitronTheme.shapes.medium)
+                                    .combinedClickable(
+                                        onClick = { onOpenAttachment(attachment) },
+                                        onLongClick = { copyText() },
+                                    ),
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                "${attachment.displayName}  ·  ${formatBytes(attachment.byteSize)}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = NitronTheme.colors.textTertiary,
+                            )
+                        } else {
+                            AttachmentChip(attachment.displayName, attachment.byteSize) {
+                                onOpenAttachment(attachment)
+                            }
+                        }
                     }
                 }
             }
-            MessageStats(message)
             if (message.status == MessageStatus.FAILED && message.errorText != null) {
                 Spacer(Modifier.height(6.dp))
                 Text(
@@ -456,33 +573,45 @@ private fun MessageBubble(
                 )
             }
             if (message.status != MessageStatus.STREAMING) {
-                Box(contentAlignment = if (isUser) Alignment.BottomStart else Alignment.BottomEnd) {
-                    DropdownMenu(expanded = actionsOpen, onDismissRequest = { actionsOpen = false }) {
-                        DropdownMenuItem(
-                            text = { Text(strings.copyText) },
-                            onClick = {
-                                actionsOpen = false
-                                copyText()
-                            },
+                // Stats on the left, the ⋯ actions button right after them.
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                    val stats = statsLine(message)
+                    if (stats != null) {
+                        Text(
+                            stats,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = NitronTheme.colors.textTertiary,
+                            modifier = Modifier.weight(1f),
                         )
-                        if (!isUser) {
+                    } else {
+                        Spacer(Modifier.weight(1f))
+                    }
+                    Box(contentAlignment = Alignment.CenterEnd) {
+                        DropdownMenu(expanded = actionsOpen, onDismissRequest = { actionsOpen = false }) {
                             DropdownMenuItem(
-                                text = { Text(if (message.status == MessageStatus.FAILED) strings.retry else strings.regenerate) },
+                                text = { Text(strings.copyText) },
                                 onClick = {
                                     actionsOpen = false
-                                    onRegenerate()
+                                    copyText()
+                                },
+                            )
+                            if (!isUser) {
+                                DropdownMenuItem(
+                                    text = { Text(if (message.status == MessageStatus.FAILED) strings.retry else strings.regenerate) },
+                                    onClick = {
+                                        actionsOpen = false
+                                        onRegenerate()
+                                    },
+                                )
+                            }
+                            DropdownMenuItem(
+                                text = { Text(strings.deleteMessage, color = NitronTheme.colors.destructive) },
+                                onClick = {
+                                    actionsOpen = false
+                                    onDelete()
                                 },
                             )
                         }
-                        DropdownMenuItem(
-                            text = { Text(strings.deleteMessage, color = NitronTheme.colors.destructive) },
-                            onClick = {
-                                actionsOpen = false
-                                onDelete()
-                            },
-                        )
-                    }
-                    if (!isUser) {
                         IconButton(
                             onClick = { actionsOpen = true },
                             modifier = Modifier.size(32.dp),
@@ -502,11 +631,9 @@ private fun MessageBubble(
 }
 
 /** tok/s, response time and token counts, when the provider reported them. */
-@Composable
-private fun MessageStats(message: ChatMessage) {
-    if (message.status != MessageStatus.COMPLETE) return
-    val durationSeconds = message.generationDurationMillis?.let { it / 1_000.0 }
-    if (durationSeconds == null) return
+private fun statsLine(message: ChatMessage): String? {
+    if (message.status != MessageStatus.COMPLETE) return null
+    val durationSeconds = message.generationDurationMillis?.let { it / 1_000.0 } ?: return null
     val parts = buildList {
         val tokens = message.outputTokens
         if (tokens != null && tokens > 0 && durationSeconds > 0.05) {
@@ -516,13 +643,7 @@ private fun MessageStats(message: ChatMessage) {
         message.outputTokens?.let { add("$it tok") }
         message.inputTokens?.let { add("in $it") }
     }
-    if (parts.isEmpty()) return
-    Spacer(Modifier.height(6.dp))
-    Text(
-        parts.joinToString("  ·  "),
-        style = MaterialTheme.typography.labelSmall,
-        color = NitronTheme.colors.textTertiary,
-    )
+    return parts.takeIf { it.isNotEmpty() }?.joinToString("  ·  ")
 }
 
 @Composable

@@ -38,7 +38,7 @@ data class AttachmentReference(
 )
 
 @Serializable
-enum class AttachmentKind { TEXT, PDF, CSV, JSON, IMAGE }
+enum class AttachmentKind { TEXT, PDF, CSV, JSON, IMAGE, VIDEO, AUDIO, ARCHIVE, CODE, FILE }
 
 @Serializable
 data class ConversationSummary(

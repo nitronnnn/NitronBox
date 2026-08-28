@@ -1,5 +1,7 @@
 package com.nitronbox.app.ui.components
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -16,15 +18,14 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.MoreVert
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
@@ -36,6 +37,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.nitronbox.app.data.local.ConversationEntity
@@ -48,126 +50,217 @@ import com.nitronbox.app.ui.theme.pressableRipple
 import java.text.DateFormat
 import java.util.Date
 
-/** Side panel: workspace switcher plus conversation list with rename and delete actions. */
+/**
+ * Conversations drawer content: brand mark, Chats/Creator sections, workspace switcher,
+ * rename/delete via custom dark dialogs. Rounded corners and blur come from the host overlay.
+ */
 @Composable
 fun ConversationsPanel(
     viewModel: ChatSessionViewModel,
     modifier: Modifier = Modifier,
 ) {
     val strings = LocalStrings.current
-    val conversations by viewModel.conversations.collectAsState()
+    val creatorMode by viewModel.creatorMode.collectAsState()
+    val normalConversations by viewModel.normalConversations.collectAsState(initial = emptyList())
+    val creatorConversations by viewModel.creatorConversations.collectAsState(initial = emptyList())
     val activeConversation by viewModel.activeConversation.collectAsState()
     val workspaces by viewModel.workspaces.collectAsState()
     val activeWorkspace by viewModel.activeWorkspace.collectAsState()
+    val creatorFolder by viewModel.creatorFolderUri.collectAsState()
+
+    val folderPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+        uri?.let(viewModel::pickCreatorFolder)
+    }
 
     var renaming by remember { mutableStateOf<ConversationEntity?>(null) }
     var deleting by remember { mutableStateOf<ConversationEntity?>(null) }
 
     Column(
-        Modifier
+        modifier
             .fillMaxSize()
             .background(NitronTheme.colors.background)
             .padding(14.dp),
     ) {
-            Text(strings.workspaces, style = MaterialTheme.typography.labelMedium, color = NitronTheme.colors.textSecondary)
-            Spacer(Modifier.height(8.dp))
-            workspaces.forEach { workspace ->
-                val selected = workspace.id == activeWorkspace?.id
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            SpinningLogo(size = 30.dp)
+            Spacer(Modifier.padding(4.dp))
+            Text("NitronBox", style = MaterialTheme.typography.titleMedium, color = NitronTheme.colors.textPrimary)
+        }
+        Spacer(Modifier.height(12.dp))
+
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .nitronSurface(SurfaceLevel.Muted, NitronTheme.shapes.pill)
+                .padding(3.dp),
+            horizontalArrangement = Arrangement.spacedBy(3.dp),
+        ) {
+            listOf(strings.chatsTab to false, strings.creator to true).forEach { (label, value) ->
+                val selected = creatorMode == value
                 Text(
-                    workspace.name,
-                    style = MaterialTheme.typography.titleSmall,
-                    color = if (selected) NitronTheme.colors.accent else NitronTheme.colors.textPrimary,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .pressableRipple(shape = NitronTheme.shapes.small) { viewModel.selectWorkspace(workspace.id) }
-                        .padding(horizontal = 8.dp, vertical = 8.dp),
-                )
-            }
-            Spacer(Modifier.height(16.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    strings.conversations,
+                    label,
                     style = MaterialTheme.typography.labelMedium,
-                    color = NitronTheme.colors.textSecondary,
-                    modifier = Modifier.weight(1f),
+                    color = if (selected) NitronTheme.colors.onPrimary else NitronTheme.colors.textSecondary,
+                    maxLines = 1,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .weight(1f)
+                        .then(
+                            if (selected) {
+                                Modifier.background(NitronTheme.colors.primary, NitronTheme.shapes.pill)
+                            } else {
+                                Modifier
+                            },
+                        )
+                        .pressableRipple(shape = NitronTheme.shapes.pill) { viewModel.setCreatorMode(value) }
+                        .padding(vertical = 7.dp),
                 )
-                IconButton(onClick = viewModel::newConversation, modifier = Modifier.height(32.dp)) {
-                    Icon(Icons.Rounded.Add, strings.newConversation, tint = NitronTheme.colors.textPrimary, modifier = Modifier.height(18.dp))
-                }
             }
-            Spacer(Modifier.height(4.dp))
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                items(conversations, key = ConversationEntity::id) { conversation ->
-                    val selected = conversation.id == activeConversation?.id
-                    var actionsOpen by remember { mutableStateOf(false) }
-                    Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .animateItem()
-                            .nitronSurface(
-                                if (selected) SurfaceLevel.Muted else SurfaceLevel.Base,
-                                NitronTheme.shapes.small,
-                            )
-                            .pressableRipple(shape = NitronTheme.shapes.small) {
-                                viewModel.selectConversation(conversation.id)
-                            }
-                            .padding(start = 10.dp, end = 2.dp, top = 6.dp, bottom = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Column(Modifier.weight(1f)) {
-                            Text(
-                                conversation.title,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = NitronTheme.colors.textPrimary,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                            Text(
-                                DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT)
-                                    .format(Date(conversation.updatedAtEpochMillis)),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = NitronTheme.colors.textTertiary,
+        }
+        Spacer(Modifier.height(10.dp))
+
+        if (creatorMode) {
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .nitronSurface(SurfaceLevel.Raised, NitronTheme.shapes.medium)
+                    .padding(10.dp),
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Rounded.Folder, null, tint = NitronTheme.colors.accent, modifier = Modifier.height(16.dp))
+                    Spacer(Modifier.padding(3.dp))
+                    Text(
+                        creatorFolder?.let(viewModel::folderDisplayName) ?: strings.noFolderHint,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = if (creatorFolder != null) NitronTheme.colors.textPrimary else NitronTheme.colors.textSecondary,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    strings.chooseFolder,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = NitronTheme.colors.accent,
+                    modifier = Modifier.pressableRipple(shape = NitronTheme.shapes.small) { folderPicker.launch(null) },
+                )
+            }
+            Spacer(Modifier.height(8.dp))
+        }
+
+        Text(
+            strings.workspaces,
+            style = MaterialTheme.typography.labelMedium,
+            color = NitronTheme.colors.textSecondary,
+        )
+        Spacer(Modifier.height(6.dp))
+        workspaces.forEach { workspace ->
+            val selected = workspace.id == activeWorkspace?.id
+            Text(
+                workspace.name,
+                style = MaterialTheme.typography.titleSmall,
+                color = if (selected) NitronTheme.colors.accent else NitronTheme.colors.textPrimary,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .pressableRipple(shape = NitronTheme.shapes.small) { viewModel.selectWorkspace(workspace.id) }
+                    .padding(horizontal = 8.dp, vertical = 7.dp),
+            )
+        }
+        Spacer(Modifier.height(10.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                if (creatorMode) strings.creator else strings.conversations,
+                style = MaterialTheme.typography.labelMedium,
+                color = NitronTheme.colors.textSecondary,
+                modifier = Modifier.weight(1f),
+            )
+            IconButton(onClick = viewModel::newConversation, modifier = Modifier.height(32.dp)) {
+                Icon(Icons.Rounded.Add, strings.newConversation, tint = NitronTheme.colors.textPrimary, modifier = Modifier.height(18.dp))
+            }
+        }
+        Spacer(Modifier.height(4.dp))
+        val visibleConversations = if (creatorMode) creatorConversations else normalConversations
+        if (creatorMode && creatorFolder == null) {
+            Text(
+                strings.noFolderHint,
+                style = MaterialTheme.typography.bodySmall,
+                color = NitronTheme.colors.textTertiary,
+            )
+        }
+        LazyColumn(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            items(visibleConversations, key = ConversationEntity::id) { conversation ->
+                val selected = conversation.id == activeConversation?.id
+                var actionsOpen by remember { mutableStateOf(false) }
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .animateItem()
+                        .nitronSurface(
+                            if (selected) SurfaceLevel.Muted else SurfaceLevel.Base,
+                            NitronTheme.shapes.small,
+                        )
+                        .pressableRipple(shape = NitronTheme.shapes.small) {
+                            viewModel.selectConversation(conversation.id)
+                        }
+                        .padding(start = 10.dp, end = 2.dp, top = 6.dp, bottom = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            conversation.title,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = NitronTheme.colors.textPrimary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT)
+                                .format(Date(conversation.updatedAtEpochMillis)),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = NitronTheme.colors.textTertiary,
+                        )
+                    }
+                    Box {
+                        IconButton(onClick = { actionsOpen = true }, modifier = Modifier.height(30.dp)) {
+                            Icon(
+                                Icons.Rounded.MoreVert,
+                                strings.conversationActions,
+                                tint = NitronTheme.colors.textTertiary,
+                                modifier = Modifier.height(16.dp),
                             )
                         }
-                        Box {
-                            IconButton(onClick = { actionsOpen = true }, modifier = Modifier.height(30.dp)) {
-                                Icon(
-                                    Icons.Rounded.MoreVert,
-                                    "Conversation actions",
-                                    tint = NitronTheme.colors.textTertiary,
-                                    modifier = Modifier.height(16.dp),
-                                )
-                            }
-                            DropdownMenu(expanded = actionsOpen, onDismissRequest = { actionsOpen = false }) {
-                                DropdownMenuItem(
-                                    text = { Text(strings.rename) },
-                                    leadingIcon = { Icon(Icons.Rounded.Edit, null) },
-                                    onClick = {
-                                        actionsOpen = false
-                                        renaming = conversation
-                                    },
-                                )
-                                DropdownMenuItem(
-                                    text = { Text(strings.delete) },
-                                    leadingIcon = { Icon(Icons.Rounded.Delete, null, tint = NitronTheme.colors.destructive) },
-                                    onClick = {
-                                        actionsOpen = false
-                                        deleting = conversation
-                                    },
-                                )
-                            }
+                        DropdownMenu(expanded = actionsOpen, onDismissRequest = { actionsOpen = false }) {
+                            DropdownMenuItem(
+                                text = { Text(strings.rename) },
+                                leadingIcon = { Icon(Icons.Rounded.Edit, null) },
+                                onClick = {
+                                    actionsOpen = false
+                                    renaming = conversation
+                                },
+                            )
+                            DropdownMenuItem(
+                                text = { Text(strings.delete) },
+                                leadingIcon = { Icon(Icons.Rounded.Delete, null, tint = NitronTheme.colors.destructive) },
+                                onClick = {
+                                    actionsOpen = false
+                                    deleting = conversation
+                                },
+                            )
                         }
                     }
                 }
             }
         }
+    }
 
+    Box(Modifier.fillMaxSize()) {
     renaming?.let { conversation ->
         var title by remember(conversation.id) { mutableStateOf(conversation.title) }
-        AlertDialog(
-            onDismissRequest = { renaming = null },
-            title = { Text(strings.renameConversation) },
-            text = {
+        NitronCenterDialog(visible = true, onDismiss = { renaming = null }) {
+            Column(Modifier.padding(18.dp).fillMaxWidth(0.86f)) {
+                Text(strings.renameConversation, style = MaterialTheme.typography.titleMedium, color = NitronTheme.colors.textPrimary)
+                Spacer(Modifier.height(12.dp))
                 TextField(
                     value = title,
                     onValueChange = { title = it },
@@ -179,32 +272,62 @@ fun ConversationsPanel(
                         unfocusedIndicatorColor = Color.Transparent,
                     ),
                 )
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
+                Spacer(Modifier.height(14.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.align(Alignment.End)) {
+                    TextButtonFlat(strings.cancel) { renaming = null }
+                    TextButtonFlat(strings.save, enabled = title.isNotBlank(), accent = true) {
                         viewModel.renameConversation(conversation.id, title)
                         renaming = null
-                    },
-                    enabled = title.isNotBlank(),
-                ) { Text(strings.save) }
-            },
-            dismissButton = { TextButton(onClick = { renaming = null }) { Text(strings.cancel) } },
-        )
+                    }
+                }
+            }
+        }
     }
 
     deleting?.let { conversation ->
-        AlertDialog(
-            onDismissRequest = { deleting = null },
-            title = { Text(strings.deleteConversationTitle) },
-            text = { Text(strings.deleteConversationBody(conversation.title)) },
-            confirmButton = {
-                TextButton(onClick = {
-                    viewModel.deleteConversation(conversation.id)
-                    deleting = null
-                }) { Text(strings.delete, color = NitronTheme.colors.destructive) }
-            },
-            dismissButton = { TextButton(onClick = { deleting = null }) { Text(strings.cancel) } },
-        )
+        NitronCenterDialog(visible = true, onDismiss = { deleting = null }) {
+            Column(Modifier.padding(18.dp).fillMaxWidth(0.86f)) {
+                Text(strings.deleteConversationTitle, style = MaterialTheme.typography.titleMedium, color = NitronTheme.colors.textPrimary)
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    strings.deleteConversationBody(conversation.title),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = NitronTheme.colors.textSecondary,
+                )
+                Spacer(Modifier.height(14.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.align(Alignment.End)) {
+                    TextButtonFlat(strings.cancel) { deleting = null }
+                    TextButtonFlat(strings.delete, destructive = true) {
+                        viewModel.deleteConversation(conversation.id)
+                        deleting = null
+                    }
+                }
+            }
+        }
     }
+    }
+}
+
+/** Flat text button used inside custom dialogs. */
+@Composable
+fun TextButtonFlat(
+    label: String,
+    enabled: Boolean = true,
+    accent: Boolean = false,
+    destructive: Boolean = false,
+    onClick: () -> Unit,
+) {
+    val color = when {
+        destructive -> NitronTheme.colors.destructive
+        accent -> NitronTheme.colors.accent
+        else -> NitronTheme.colors.textSecondary
+    }
+    Text(
+        label,
+        style = MaterialTheme.typography.labelLarge,
+        color = if (enabled) color else color.copy(alpha = 0.4f),
+        modifier = Modifier
+            .pressableRipple(shape = NitronTheme.shapes.small, enabled = enabled, onClick = onClick)
+            .padding(horizontal = 10.dp, vertical = 8.dp),
+    )
 }

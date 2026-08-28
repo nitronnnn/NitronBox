@@ -15,7 +15,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         AttachmentEntity::class,
         ProviderProfileEntity::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = true,
 )
 abstract class NitronBoxDatabase : RoomDatabase() {
@@ -50,6 +50,13 @@ abstract class NitronBoxDatabase : RoomDatabase() {
             }
         }
 
+        /** v4 marks Creator conversations with their project folder (SAF tree URI). */
+        private val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE conversations ADD COLUMN folderUri TEXT")
+            }
+        }
+
         fun create(context: Context): NitronBoxDatabase = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(
                 context.applicationContext,
@@ -57,7 +64,7 @@ abstract class NitronBoxDatabase : RoomDatabase() {
                 "nitronbox.db",
             )
                 .setJournalMode(JournalMode.WRITE_AHEAD_LOGGING)
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                 .build()
                 .also { instance = it }
         }

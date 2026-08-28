@@ -39,6 +39,8 @@ data class ConversationEntity(
     val updatedAtEpochMillis: Long,
     val summary: String? = null,
     val summaryThroughEpochMillis: Long? = null,
+    /** SAF tree URI for Creator-mode chats; null for regular conversations. */
+    val folderUri: String? = null,
 )
 
 @Entity(

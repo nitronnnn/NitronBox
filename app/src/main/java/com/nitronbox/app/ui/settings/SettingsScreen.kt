@@ -55,6 +55,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
@@ -69,6 +71,9 @@ import com.nitronbox.app.ui.i18n.LocalStrings
 import com.nitronbox.app.ui.theme.NitronTheme
 import com.nitronbox.app.ui.theme.SurfaceLevel
 import com.nitronbox.app.ui.theme.nitronSurface
+import com.nitronbox.app.ui.components.NitronBottomPanel
+import com.nitronbox.app.ui.components.NitronCenterDialog
+import com.nitronbox.app.ui.components.TextButtonFlat
 import com.nitronbox.app.ui.theme.pressableRipple
 
 private val PROVIDER_TEMPLATES = listOf(
@@ -114,9 +119,22 @@ fun SettingsScreen(
 
     var editingProvider by remember { mutableStateOf<ProviderProfile?>(null) }
     var prefill by remember { mutableStateOf<ProviderTemplate?>(null) }
+    var wallpaperOpen by remember { mutableStateOf(false) }
+    var deletingProvider by remember { mutableStateOf<ProviderProfile?>(null) }
 
+    // Every overlay on this screen blurs the settings content beneath it.
+    val overlayOpen = editingProvider != null || prefill != null ||
+        wallpaperOpen || deletingProvider != null
+    val blurProgress by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = if (overlayOpen) 1f else 0f,
+        label = "settingsBlur",
+    )
+
+    Box(modifier.fillMaxSize().background(NitronTheme.colors.background)) {
     Scaffold(
-        modifier = modifier,
+        modifier = Modifier
+            .fillMaxSize()
+            .blur(20.dp * blurProgress),
         topBar = {
             TopAppBar(
                 title = { Text(strings.settings) },
@@ -234,13 +252,32 @@ fun SettingsScreen(
                         onSelect = viewModel::setLanguage,
                     )
                     HorizontalDivider(color = NitronTheme.colors.border)
-                    Text(strings.wallpaper, style = MaterialTheme.typography.labelLarge, color = NitronTheme.colors.textSecondary)
-                    WallpaperPicker(
-                        selected = wallpaper,
-                        imageUri = wallpaperImageUri,
-                        onSelect = viewModel::setWallpaper,
-                        onPickImage = { pickWallpaper.launch(arrayOf("image/*")) },
-                    )
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .nitronSurface(SurfaceLevel.Muted, NitronTheme.shapes.small)
+                            .pressableRipple(shape = NitronTheme.shapes.small) { wallpaperOpen = true }
+                            .padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            strings.wallpaper,
+                            style = MaterialTheme.typography.labelLarge,
+                            color = NitronTheme.colors.textPrimary,
+                            modifier = Modifier.weight(1f),
+                        )
+                        WallpaperThumb(
+                            previewColors = wallpaperPreviewColors(wallpaper),
+                            isSelected = false,
+                            onClick = { wallpaperOpen = true },
+                        )
+                        Icon(
+                            Icons.Rounded.ExpandMore,
+                            null,
+                            tint = NitronTheme.colors.textSecondary,
+                            modifier = Modifier.padding(start = 6.dp),
+                        )
+                    }
                 }
             }
             item { HorizontalDivider(color = NitronTheme.colors.border) }
@@ -266,6 +303,7 @@ fun SettingsScreen(
     if (prefill != null || editingProvider != null) {
         val template = prefill
         ProviderEditorSheet(
+            modifier = Modifier.align(Alignment.BottomCenter),
             initial = editingProvider,
             prefillName = template?.name.orEmpty(),
             prefillProtocol = template?.protocol ?: ProviderProtocol.OPENAI_COMPATIBLE,
@@ -281,77 +319,126 @@ fun SettingsScreen(
             },
             onTest = { profileId -> viewModel.testProvider(profileId) },
             onDiscover = { profileId -> viewModel.discoverModels(profileId) },
-            onDelete = { profileId ->
-                viewModel.deleteProvider(profileId)
-                prefill = null
-                editingProvider = null
+            onDeleteRequest = { profile ->
+                deletingProvider = profile
             },
         )
     }
+
+    if (wallpaperOpen) {
+        WallpaperPanel(
+            modifier = Modifier.align(Alignment.BottomCenter),
+            selected = wallpaper,
+            imageUri = wallpaperImageUri,
+            onSelect = viewModel::setWallpaper,
+            onPickImage = { pickWallpaper.launch(arrayOf("image/*")) },
+            onDismiss = { wallpaperOpen = false },
+        )
+    }
+
+    deletingProvider?.let { profile ->
+        NitronCenterDialog(visible = true, onDismiss = { deletingProvider = null }, modifier = Modifier.align(Alignment.Center)) {
+            Column(Modifier.padding(18.dp).fillMaxWidth(0.86f)) {
+                Text(strings.delete, style = MaterialTheme.typography.titleMedium, color = NitronTheme.colors.textPrimary)
+                Spacer(Modifier.height(8.dp))
+                Text(profile.displayName, style = MaterialTheme.typography.bodyMedium, color = NitronTheme.colors.textSecondary)
+                Spacer(Modifier.height(14.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.align(Alignment.End)) {
+                    TextButtonFlat(strings.cancel) { deletingProvider = null }
+                    TextButtonFlat(strings.delete, destructive = true) {
+                        viewModel.deleteProvider(profile.id)
+                        deletingProvider = null
+                    }
+                }
+            }
+        }
+    }
+    }
 }
 
-/** Row of wallpaper presets with mini previews plus a SAF photo picker entry. */
+/** Preset preview colors, shared by the settings row and the wallpaper panel. */
+private fun wallpaperPreviewColors(preset: com.nitronbox.app.data.settings.WallpaperPreset): List<Color> = when (preset) {
+    com.nitronbox.app.data.settings.WallpaperPreset.MIDNIGHT -> listOf(Color(0xFF0B1428), Color(0xFF2C4A7C))
+    com.nitronbox.app.data.settings.WallpaperPreset.AURORA -> listOf(Color(0xFF07231D), Color(0xFF1E8F6E))
+    com.nitronbox.app.data.settings.WallpaperPreset.SUNSET -> listOf(Color(0xFF2B0F1E), Color(0xFF93395B))
+    com.nitronbox.app.data.settings.WallpaperPreset.GRAPHITE -> listOf(Color(0xFF0E0E10), Color(0xFF3A3A42))
+    com.nitronbox.app.data.settings.WallpaperPreset.LOGO -> listOf(Color(0xFF0C1020), Color(0xFF3FC8F5))
+    com.nitronbox.app.data.settings.WallpaperPreset.CUSTOM -> listOf(Color(0xFF3A3A40), Color(0xFF6E6E78))
+    com.nitronbox.app.data.settings.WallpaperPreset.NONE -> listOf(Color(0xFF16181D), Color(0xFF2A2D34))
+}
+
+/** Custom wallpaper panel: preset thumbs plus a SAF photo, all in one in-window overlay. */
 @Composable
-private fun WallpaperPicker(
+private fun WallpaperPanel(
+    modifier: Modifier = Modifier,
     selected: com.nitronbox.app.data.settings.WallpaperPreset,
     imageUri: String?,
     onSelect: (com.nitronbox.app.data.settings.WallpaperPreset) -> Unit,
     onPickImage: () -> Unit,
+    onDismiss: () -> Unit,
 ) {
     val strings = LocalStrings.current
     val presets = listOf(
-        com.nitronbox.app.data.settings.WallpaperPreset.NONE to listOf(Color(0xFF16181D), Color(0xFF2A2D34)),
-        com.nitronbox.app.data.settings.WallpaperPreset.MIDNIGHT to listOf(Color(0xFF0B1428), Color(0xFF2C4A7C)),
-        com.nitronbox.app.data.settings.WallpaperPreset.AURORA to listOf(Color(0xFF07231D), Color(0xFF1E8F6E)),
-        com.nitronbox.app.data.settings.WallpaperPreset.SUNSET to listOf(Color(0xFF2B0F1E), Color(0xFF93395B)),
-        com.nitronbox.app.data.settings.WallpaperPreset.GRAPHITE to listOf(Color(0xFF0E0E10), Color(0xFF3A3A42)),
-        com.nitronbox.app.data.settings.WallpaperPreset.LOGO to listOf(Color(0xFF0C1020), Color(0xFF3FC8F5)),
+        com.nitronbox.app.data.settings.WallpaperPreset.NONE,
+        com.nitronbox.app.data.settings.WallpaperPreset.LOGO,
+        com.nitronbox.app.data.settings.WallpaperPreset.MIDNIGHT,
+        com.nitronbox.app.data.settings.WallpaperPreset.AURORA,
+        com.nitronbox.app.data.settings.WallpaperPreset.SUNSET,
+        com.nitronbox.app.data.settings.WallpaperPreset.GRAPHITE,
     )
-    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        items(presets) { (preset, previewColors) ->
-            val isSelected = preset == selected
-            WallpaperThumb(
-                previewColors = previewColors,
-                isSelected = isSelected,
-                onClick = { onSelect(preset) },
-            )
-        }
-        item {
-            val isSelected = selected == com.nitronbox.app.data.settings.WallpaperPreset.CUSTOM
-            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Box(
-                    Modifier
-                        .size(width = 62.dp, height = 42.dp)
-                        .nitronSurface(
-                            if (isSelected) SurfaceLevel.Raised else SurfaceLevel.Muted,
-                            NitronTheme.shapes.small,
+    com.nitronbox.app.ui.components.NitronBottomPanel(visible = true, onDismiss = onDismiss, modifier = modifier) {
+        Column(Modifier.padding(horizontal = 16.dp).padding(bottom = 20.dp)) {
+            Text(strings.wallpaper, style = MaterialTheme.typography.headlineSmall, color = NitronTheme.colors.textPrimary)
+            Spacer(Modifier.height(12.dp))
+            androidx.compose.foundation.lazy.LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                items(presets.size) { index ->
+                    val preset = presets[index]
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        WallpaperThumb(
+                            previewColors = wallpaperPreviewColors(preset),
+                            isSelected = preset == selected,
+                            onClick = { onSelect(preset) },
                         )
-                        .then(
-                            if (isSelected) {
-                                Modifier.background(color = NitronTheme.colors.accent, shape = NitronTheme.shapes.small)
-                            } else {
-                                Modifier
-                            },
-                        )
-                        .pressableRipple(shape = NitronTheme.shapes.small, onClick = onPickImage),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    if (isSelected && imageUri != null) {
-                        coil.compose.AsyncImage(
-                            model = imageUri,
-                            contentDescription = null,
-                            modifier = Modifier.fillMaxSize(),
-                        )
-                    } else {
-                        Text("+", style = MaterialTheme.typography.titleMedium, color = NitronTheme.colors.textPrimary)
                     }
                 }
-                Text(
-                    strings.wallpaperPhoto,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = NitronTheme.colors.textSecondary,
-                )
+                item {
+                    val isSelected = selected == com.nitronbox.app.data.settings.WallpaperPreset.CUSTOM
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Box(
+                            Modifier
+                                .size(width = 62.dp, height = 42.dp)
+                                .nitronSurface(SurfaceLevel.Raised, NitronTheme.shapes.small)
+                                .then(
+                                    if (isSelected) {
+                                        Modifier.border(2.dp, NitronTheme.colors.accent, NitronTheme.shapes.small)
+                                    } else {
+                                        Modifier.border(1.dp, NitronTheme.colors.border, NitronTheme.shapes.small)
+                                    },
+                                )
+                                .pressableRipple(shape = NitronTheme.shapes.small, onClick = onPickImage),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            if (isSelected && imageUri != null) {
+                                coil.compose.AsyncImage(
+                                    model = imageUri,
+                                    contentDescription = null,
+                                    contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize(),
+                                )
+                            } else {
+                                Text("+", style = MaterialTheme.typography.titleMedium, color = NitronTheme.colors.textPrimary)
+                            }
+                        }
+                        Text(
+                            strings.wallpaperPhoto,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = NitronTheme.colors.textSecondary,
+                        )
+                    }
+                }
             }
+            Spacer(Modifier.height(16.dp))
+            Button(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) { Text(strings.close) }
         }
     }
 }
@@ -472,10 +559,10 @@ private fun ProviderCard(
     }
 }
 
-/** Provider editor as a custom bottom sheet: protocol chips, credentials, health check. */
-@OptIn(ExperimentalMaterial3Api::class)
+/** Provider editor as a custom bottom panel: protocol chips, credentials, health check. */
 @Composable
 private fun ProviderEditorSheet(
+    modifier: Modifier = Modifier,
     initial: ProviderProfile?,
     prefillName: String,
     prefillProtocol: ProviderProtocol,
@@ -484,18 +571,17 @@ private fun ProviderEditorSheet(
     onSave: (ProviderProfile, CharArray?) -> Unit,
     onTest: (String) -> Unit,
     onDiscover: (String) -> Unit,
-    onDelete: (String) -> Unit,
+    onDeleteRequest: (ProviderProfile) -> Unit,
 ) {
     val strings = LocalStrings.current
     var displayName by remember { mutableStateOf(initial?.displayName ?: prefillName) }
     var baseUrl by remember { mutableStateOf(initial?.baseUrl ?: prefillBaseUrl) }
     var protocol by remember { mutableStateOf(initial?.protocol ?: prefillProtocol) }
     var apiKey by remember { mutableStateOf("") }
-    var confirmDelete by remember { mutableStateOf(false) }
 
     val valid = displayName.isNotBlank() && baseUrl.startsWith("http")
 
-    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = NitronTheme.colors.background) {
+    com.nitronbox.app.ui.components.NitronBottomPanel(visible = true, onDismiss = onDismiss, modifier = modifier) {
         Column(
             Modifier
                 .fillMaxWidth()
@@ -567,29 +653,12 @@ private fun ProviderEditorSheet(
             ) { Text(strings.save) }
             if (initial != null) {
                 TextButton(
-                    onClick = { confirmDelete = true },
+                    onClick = { onDeleteRequest(initial) },
                     modifier = Modifier.align(Alignment.CenterHorizontally),
                 ) {
                     Text(strings.delete, color = NitronTheme.colors.destructive)
                 }
             }
-        }
-    }
-
-    if (confirmDelete) {
-        initial?.let { profile ->
-            AlertDialog(
-                onDismissRequest = { confirmDelete = false },
-                title = { Text(strings.delete) },
-                text = { Text(profile.displayName) },
-                confirmButton = {
-                    TextButton(onClick = {
-                        onDelete(profile.id)
-                        confirmDelete = false
-                    }) { Text(strings.delete, color = NitronTheme.colors.destructive) }
-                },
-                dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text(strings.cancel) } },
-            )
         }
     }
 }

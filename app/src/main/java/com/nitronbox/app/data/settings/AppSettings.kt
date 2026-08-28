@@ -53,7 +53,7 @@ class AppSettings(private val context: Context) {
     val wallpaper: Flow<WallpaperPreset> = context.dataStore.data.map { prefs ->
         prefs[KEY_WALLPAPER]?.let { stored ->
             WallpaperPreset.entries.firstOrNull { it.name == stored }
-        } ?: WallpaperPreset.NONE
+        } ?: WallpaperPreset.LOGO
     }
 
     val wallpaperImageUri: Flow<String?> = context.dataStore.data.map { it[KEY_WALLPAPER_URI] }
@@ -97,6 +97,13 @@ class AppSettings(private val context: Context) {
     /** One-time upgrade: workspaces created with the old capped defaults become unlimited. */
     val legacyDefaultsMigrated: Flow<Boolean> = context.dataStore.data.map { it[KEY_DEFAULTS_MIGRATED] == "true" }
 
+    /** SAF tree of the project folder used by Creator-mode chats. */
+    val activeCreatorFolder: Flow<String?> = context.dataStore.data.map { it[KEY_CREATOR_FOLDER] }
+
+    suspend fun setActiveCreatorFolder(uri: String?) = context.dataStore.edit { prefs ->
+        if (uri == null) prefs.remove(KEY_CREATOR_FOLDER) else prefs[KEY_CREATOR_FOLDER] = uri
+    }
+
     suspend fun markLegacyDefaultsMigrated() = context.dataStore.edit { prefs ->
         prefs[KEY_DEFAULTS_MIGRATED] = "true"
     }
@@ -118,5 +125,6 @@ class AppSettings(private val context: Context) {
         val KEY_WALLPAPER = stringPreferencesKey("wallpaper_preset")
         val KEY_WALLPAPER_URI = stringPreferencesKey("wallpaper_image_uri")
         val KEY_DEFAULTS_MIGRATED = stringPreferencesKey("legacy_defaults_migrated")
+        val KEY_CREATOR_FOLDER = stringPreferencesKey("creator_folder_uri")
     }
 }

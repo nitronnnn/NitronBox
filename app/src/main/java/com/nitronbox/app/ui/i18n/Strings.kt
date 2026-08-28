@@ -83,6 +83,11 @@ data class Strings(
     val wallpaper: String,
     val wallpaperPhoto: String,
     val unlimitedHint: String,
+    val creator: String,
+    val chatsTab: String,
+    val chooseFolder: String,
+    val noFolderHint: String,
+    val open: String,
 )
 
 val EnglishStrings = Strings(
@@ -160,6 +165,11 @@ val EnglishStrings = Strings(
     wallpaper = "Wallpaper",
     wallpaperPhoto = "Photo…",
     unlimitedHint = "Leave empty for no limit",
+    creator = "Creator",
+    chatsTab = "Chats",
+    chooseFolder = "Choose folder",
+    noFolderHint = "Select a project folder first — the model will be able to read, edit, create and delete files in it.",
+    open = "Open",
 )
 
 val RussianStrings = Strings(
@@ -237,6 +247,11 @@ val RussianStrings = Strings(
     wallpaper = "Обои",
     wallpaperPhoto = "Своя картинка…",
     unlimitedHint = "Оставьте пустым — без лимита",
+    creator = "Creator",
+    chatsTab = "Диалоги",
+    chooseFolder = "Выбрать папку",
+    noFolderHint = "Сначала выберите папку проекта — модель сможет читать, редактировать, создавать и удалять файлы в ней.",
+    open = "Открыть",
 )
 
 val LocalStrings = compositionLocalOf { EnglishStrings }

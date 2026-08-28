@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -27,7 +28,6 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -50,12 +50,13 @@ import com.nitronbox.app.ui.theme.pressableRipple
 /**
  * Model selection: providers grouped with their live catalogs from each provider's discovery
  * endpoint. Catalogs load automatically on open; selection becomes the generation target.
+ * Rendered as a custom in-window bottom panel so the screen behind can blur.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ModelPickerSheet(
     viewModel: ChatSessionViewModel,
     onDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
     onOpenSettings: () -> Unit = {},
 ) {
     val strings = LocalStrings.current
@@ -67,8 +68,8 @@ fun ModelPickerSheet(
         if (providers.isNotEmpty()) viewModel.refreshAllModels()
     }
 
-    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = NitronTheme.colors.background) {
-        Column(Modifier.padding(horizontal = 16.dp)) {
+    NitronBottomPanel(visible = true, onDismiss = onDismiss, modifier = modifier) {
+        Column(Modifier.padding(horizontal = 16.dp).padding(bottom = 12.dp)) {
             Text(strings.selectModel, style = MaterialTheme.typography.headlineSmall, color = NitronTheme.colors.textPrimary)
             Spacer(Modifier.height(4.dp))
             Text(
@@ -79,7 +80,9 @@ fun ModelPickerSheet(
             Spacer(Modifier.height(12.dp))
             LazyColumn(
                 verticalArrangement = Arrangement.spacedBy(10.dp),
-                modifier = Modifier.padding(bottom = 12.dp),
+                modifier = Modifier
+                    .padding(bottom = 24.dp)
+                    .heightIn(max = 560.dp),
             ) {
                 if (providers.isEmpty()) {
                     item {

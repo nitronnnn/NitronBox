@@ -57,6 +57,12 @@ class ChatSessionViewModel(private val container: AppContainer) : ViewModel() {
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    val normalConversations: kotlinx.coroutines.flow.Flow<List<ConversationEntity>> =
+        conversations.map { list -> list.filter { it.folderUri == null } }
+
+    val creatorConversations: kotlinx.coroutines.flow.Flow<List<ConversationEntity>> =
+        conversations.map { list -> list.filter { it.folderUri != null } }
+
     val activeConversation: StateFlow<ConversationEntity?> = combine(
         settings.activeConversationId,
         conversations,
@@ -114,6 +120,66 @@ class ChatSessionViewModel(private val container: AppContainer) : ViewModel() {
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     private var generationJob: Job? = null
+
+    // --- Creator mode ---
+
+    private val _creatorMode = MutableStateFlow(false)
+    val creatorMode: kotlinx.coroutines.flow.StateFlow<Boolean> = _creatorMode.asStateFlow()
+
+    val creatorFolderUri: StateFlow<String?> = settings.activeCreatorFolder
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    fun setCreatorMode(enabled: Boolean) {
+        _creatorMode.value = enabled
+    }
+
+    fun pickCreatorFolder(uri: android.net.Uri) {
+        viewModelScope.launch {
+            runCatching {
+                container.contentResolver.takePersistableUriPermission(
+                    uri,
+                    android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                        android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
+                )
+                settings.setActiveCreatorFolder(uri.toString())
+            }.onFailure { emit("Unable to use this folder") }
+        }
+    }
+
+    /** Display name of the creator folder for the drawer (last path segment). */
+    fun folderDisplayName(uri: String?): String = uri
+        ?.let { android.net.Uri.parse(it).lastPathSegment }
+        ?.substringAfterLast(':')
+        ?.takeIf { it.isNotBlank() }
+        ?: "project"
+
+    // --- Attachment viewer ---
+
+    data class AttachmentView(
+        val attachment: com.nitronbox.app.data.model.AttachmentReference,
+        /** Loaded text content for text-like files; null for media opened as image/external. */
+        val text: String? = null,
+    )
+
+    private val _viewer = MutableStateFlow<AttachmentView?>(null)
+    val viewer: StateFlow<AttachmentView?> = _viewer.asStateFlow()
+
+    fun openAttachment(
+        attachment: com.nitronbox.app.data.model.AttachmentReference,
+        loadText: Boolean,
+    ) {
+        _viewer.value = AttachmentView(attachment)
+        if (loadText) {
+            viewModelScope.launch {
+                val text = container.attachmentPipeline.textContent(attachment, maximumTextChars = 200_000)
+                _viewer.value = _viewer.value?.copy(text = text ?: "Unable to read the file")
+            }
+        }
+    }
+
+    fun closeViewer() {
+        _viewer.value = null
+    }
 
     init {
         viewModelScope.launch { bootstrap() }
@@ -191,10 +257,18 @@ class ChatSessionViewModel(private val container: AppContainer) : ViewModel() {
                 if (conversationId != prepared.conversationId) {
                     settings.setActiveConversation(prepared.conversationId)
                 }
+                // Creator chats get filesystem tools rooted at their project folder.
+                val folderUri = repository.conversation(prepared.conversationId)?.folderUri
+                    ?: _creatorMode.value.takeIf { it }?.let { settings.activeCreatorFolder.first() }
+                val creatorTools = folderUri?.let { container.creatorFileTools.rootFor(it) }?.let {
+                    container.creatorFileTools
+                }
                 runGeneration(
                     conversationId = prepared.conversationId,
                     workspace = workspace,
                     target = ModelTarget(model.providerId, model.modelId, model.displayName),
+                    creatorTools = creatorTools,
+                    creatorRootUri = if (creatorTools != null) folderUri else null,
                 )
             } catch (failure: Exception) {
                 _draft.value = _draft.value.ifBlank { text }
@@ -203,11 +277,26 @@ class ChatSessionViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
 
-    private suspend fun runGeneration(conversationId: String, workspace: Workspace, target: ModelTarget) {
+    private suspend fun runGeneration(
+        conversationId: String,
+        workspace: Workspace,
+        target: ModelTarget,
+        creatorTools: com.nitronbox.app.data.filesystem.CreatorFileTools? = null,
+        creatorRootUri: String? = null,
+    ) {
         val registry = registryFlow.value ?: container.loadRegistry()
         _isStreaming.value = true
         try {
-            when (val outcome = service.generateReply(conversationId, workspace, registry, target)) {
+            when (
+                val outcome = service.generateReply(
+                    conversationId,
+                    workspace,
+                    registry,
+                    target,
+                    creatorTools = creatorTools,
+                    creatorRootUri = creatorRootUri,
+                )
+            ) {
                 is ChatService.TurnOutcome.Failed -> emit(outcome.errorText)
                 else -> Unit
             }
@@ -250,7 +339,21 @@ class ChatSessionViewModel(private val container: AppContainer) : ViewModel() {
     fun newConversation() {
         viewModelScope.launch {
             val workspace = activeWorkspace.value ?: return@launch
-            val conversation = repository.createConversation(workspace.id, ChatRepository.DEFAULT_TITLE)
+            val folderUri = if (_creatorMode.value) {
+                val folder = settings.activeCreatorFolder.first()
+                if (folder == null) {
+                    emit("Select a project folder first.")
+                    return@launch
+                }
+                folder
+            } else {
+                null
+            }
+            val conversation = repository.createConversation(
+                workspace.id,
+                ChatRepository.DEFAULT_TITLE,
+                folderUri,
+            )
             settings.setActiveConversation(conversation.id)
         }
     }
