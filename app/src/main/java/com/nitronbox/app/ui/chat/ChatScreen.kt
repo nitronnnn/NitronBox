@@ -559,7 +559,7 @@ private fun WelcomeCard(
             }
         }
     }
-    }
+    }   // FrostSurface
 }
 
 @Composable
@@ -783,9 +783,9 @@ private fun MessageBubble(
                     }
                 }
             }
-        }
-        }
-    }
+    }       // Column
+    }       // FrostSurface
+    }       // Row
 }
 
 /** tok/s, response time and token counts, when the provider reported them. */
