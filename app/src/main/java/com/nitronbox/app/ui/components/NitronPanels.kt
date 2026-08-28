@@ -70,10 +70,12 @@ fun OverlayScrim(
 fun Modifier.frostPanel(shape: androidx.compose.ui.graphics.Shape): Modifier {
     val fx = LocalUiFx.current
     val state = LocalHazeState.current
-    val tintColor = NitronTheme.colors.background.copy(alpha = 0.78f)
+    val surfaceColor = NitronTheme.colors.background
+    val tintColor = surfaceColor.copy(alpha = 0.78f)
     val radius = fx.blurRadius.dp
     val base = if (fx.blurredPanels && fx.blurEnabled && state != null) {
         Modifier.hazeEffect(state) {
+            backgroundColor = surfaceColor
             tints = listOf(HazeTint(tintColor))
             blurRadius = radius
             noiseFactor = 0f
