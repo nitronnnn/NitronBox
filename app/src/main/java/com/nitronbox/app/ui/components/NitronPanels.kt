@@ -143,14 +143,21 @@ fun NitronCenterDialog(
         exit = scaleOut(tween(160), targetScale = 0.94f) + fadeOut(tween(140)),
         modifier = modifier,
     ) {
+        // Fill the screen and center the card; without fillMaxSize the node wraps
+        // to its content and lands at the top-start of the parent.
         Box(
             Modifier
-                .wrapContentSize(Alignment.Center)
-                .padding(horizontal = 32.dp)
-                .imePadding()
-                .frostPanel(NitronTheme.shapes.large),
+                .fillMaxSize()
+                .imePadding(),
+            contentAlignment = Alignment.Center,
         ) {
-            content()
+            Box(
+                Modifier
+                    .padding(horizontal = 32.dp)
+                    .frostPanel(NitronTheme.shapes.large),
+            ) {
+                content()
+            }
         }
     }
 }
