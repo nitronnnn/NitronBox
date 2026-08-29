@@ -589,6 +589,7 @@ private fun MessageBubble(
     onCopy: (String) -> Unit,
 ) {
     val strings = LocalStrings.current
+    val fx = LocalUiFx.current
     val isUser = message.role == MessageRole.USER
     var actionsOpen by remember { mutableStateOf(false) }
     val context = LocalContext.current
@@ -598,18 +599,24 @@ private fun MessageBubble(
         android.widget.Toast.makeText(context, strings.copied, android.widget.Toast.LENGTH_SHORT).show()
     }
 
+    // One material for both roles: frosted (real backdrop blur) or solid black.
+    @Composable
+    fun bubbleSurface(modifier: Modifier): Modifier = if (fx.blurredPanels) {
+        modifier.frostPanel(NitronTheme.shapes.large)
+    } else {
+        modifier.background(NitronTheme.colors.background, NitronTheme.shapes.large)
+    }
+
     Row(
         Modifier.fillMaxWidth(),
         horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start,
     ) {
         Column(
-            Modifier
-                .widthIn(max = 640.dp)
-                .fillMaxWidth(if (isUser) 0.85f else 0.96f)
-                .then(
-                    // Same frosted material for both roles - one color.
-                    Modifier.frostPanel(NitronTheme.shapes.large),
-                )
+            bubbleSurface(
+                Modifier
+                    .widthIn(max = 640.dp)
+                    .fillMaxWidth(if (isUser) 0.85f else 0.96f),
+            )
                 .combinedClickable(
                     onClick = {},
                     onLongClick = { actionsOpen = true },
@@ -659,8 +666,7 @@ private fun MessageBubble(
                     val markdownText = extraction.second
                     if (toolLines.isNotEmpty()) {
                         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            toolLines.forEach { line ->
-                                val label = line.trimStart().removePrefix("\u27e6tool\u27e7 ").trim()
+                            toolLines.forEach { label ->
                                 Row(
                                     Modifier
                                         .nitronSurface(SurfaceLevel.Muted, NitronTheme.shapes.pill)
@@ -704,7 +710,6 @@ private fun MessageBubble(
                     message.attachments.forEach { attachment ->
                         Spacer(Modifier.height(8.dp))
                         if (attachment.kind == com.nitronbox.app.data.model.AttachmentKind.IMAGE) {
-                            // Inline preview: tap to open the full-screen viewer.
                             coil.compose.AsyncImage(
                                 model = attachment.persistedUri,
                                 contentDescription = attachment.displayName,
@@ -741,7 +746,6 @@ private fun MessageBubble(
                 )
             }
             if (message.status != MessageStatus.STREAMING) {
-                // Stats on the left, the ⋯ actions button right after them.
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                     val stats = statsLine(message)
                     if (stats != null) {
@@ -772,15 +776,6 @@ private fun MessageBubble(
                                     },
                                 )
                             }
-                            if (isUser) {
-                                DropdownMenuItem(
-                                    text = { Text(strings.repeat) },
-                                    onClick = {
-                                        actionsOpen = false
-                                        onRepeat()
-                                    },
-                                )
-                            }
                             DropdownMenuItem(
                                 text = { Text(strings.deleteMessage, color = NitronTheme.colors.destructive) },
                                 onClick = {
@@ -803,8 +798,8 @@ private fun MessageBubble(
                     }
                 }
             }
-    }       // Column
-    }       // Row
+        }
+    }
 }
 
 /** tok/s, response time and token counts, when the provider reported them. */

@@ -70,6 +70,7 @@ fun ConversationsPanel(
     val activeWorkspace by viewModel.activeWorkspace.collectAsState()
     val creatorFolder by viewModel.creatorFolderUri.collectAsState()
     val creatorFolders by viewModel.creatorFolders.collectAsState()
+    val visibleCreatorChats = creatorConversations.filter { it.folderUri == creatorFolder }
 
     val folderPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         uri?.let(viewModel::pickCreatorFolder)
@@ -174,7 +175,7 @@ fun ConversationsPanel(
             }
         }
         Spacer(Modifier.height(4.dp))
-        val visibleConversations = if (creatorMode) creatorConversations else normalConversations
+        val visibleConversations = if (creatorMode) visibleCreatorChats else normalConversations
         if (creatorMode && creatorFolder == null) {
             Text(
                 strings.noFolderHint,

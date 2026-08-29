@@ -80,7 +80,7 @@ fun Modifier.frostPanel(shape: androidx.compose.ui.graphics.Shape): Modifier {
     val surfaceColor = NitronTheme.colors.background
     val tintColor = surfaceColor.copy(alpha = 0.78f)
     val radius = fx.blurRadius.dp
-    val base = if (fx.blurredPanels && fx.blurEnabled && state != null) {
+    val base = if (fx.blurredPanels && state != null) {
         Modifier.hazeEffect(state) {
             backgroundColor = surfaceColor
             tints = listOf(HazeTint(tintColor))
