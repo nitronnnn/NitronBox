@@ -74,6 +74,20 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
         saveSkill(skill.copy(enabled = !skill.enabled))
     }
 
+    /** Installs a skill from a GitHub repo/URL and enables it. */
+    fun installFromGitHub(url: String) {
+        viewModelScope.launch {
+            try {
+                val skill = container.gitHubSkillInstaller.install(url)
+                val updated = container.appSettings.loadSkills().filterNot { it.name == skill.name } + skill
+                container.appSettings.setSkills(updated)
+                emit("Installed: " + skill.name)
+            } catch (failure: Throwable) {
+                emit("Install failed: ${failure.message}")
+            }
+        }
+    }
+
     val blurEnabled: StateFlow<Boolean> = container.appSettings.blurEnabled
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
 

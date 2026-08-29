@@ -121,7 +121,8 @@ fun SettingsScreen(
     var prefill by remember { mutableStateOf<ProviderTemplate?>(null) }
     var wallpaperOpen by remember { mutableStateOf(false) }
     var deletingProvider by remember { mutableStateOf<ProviderProfile?>(null) }
-    var skillDraft by remember { mutableStateOf<com.nitronbox.app.data.settings.Skill?>(null) }
+    var installOpen by remember { mutableStateOf(false) }
+    var installUrl by remember { mutableStateOf("") }
     val skills by viewModel.skills.collectAsState()
     val blurEnabled by viewModel.blurEnabled.collectAsState()
     val blurStrength by viewModel.blurStrength.collectAsState(18f)
@@ -342,9 +343,7 @@ fun SettingsScreen(
                         style = MaterialTheme.typography.labelLarge,
                         color = NitronTheme.colors.accent,
                         modifier = Modifier
-                            .pressableRipple(shape = NitronTheme.shapes.small) {
-                                skillDraft = com.nitronbox.app.data.settings.Skill("", "")
-                            }
+                            .pressableRipple(shape = NitronTheme.shapes.small) { installOpen = true }
                             .padding(horizontal = 6.dp, vertical = 6.dp),
                     )
                 }
@@ -355,7 +354,6 @@ fun SettingsScreen(
                     Modifier
                         .fillMaxWidth()
                         .nitronSurface(SurfaceLevel.Raised, NitronTheme.shapes.medium)
-                        .pressableRipple(shape = NitronTheme.shapes.medium) { skillDraft = skill }
                         .padding(12.dp),
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -434,18 +432,17 @@ fun SettingsScreen(
         )
     }
 
-    skillDraft?.let { draft ->
+    if (installOpen) {
         NitronBottomPanel(
             visible = true,
-            onDismiss = { skillDraft = null },
+            onDismiss = { installOpen = false },
             modifier = Modifier.align(Alignment.BottomCenter),
         ) {
-            SkillEditor(
-                initial = draft,
-                onDismiss = { skillDraft = null },
-                onSave = { saved ->
-                    viewModel.saveSkill(saved)
-                    skillDraft = null
+            SkillInstallPanel(
+                onDismiss = { installOpen = false },
+                onInstall = { url ->
+                    viewModel.installFromGitHub(url)
+                    installOpen = false
                 },
             )
         }
@@ -484,15 +481,14 @@ private fun wallpaperPreviewColors(preset: com.nitronbox.app.data.settings.Wallp
 }
 
 /** Skill editor: name plus the instruction block merged into the system prompt. */
+/** GitHub skill installer: paste a repo or file URL, the markdown becomes the skill. */
 @Composable
-private fun SkillEditor(
-    initial: com.nitronbox.app.data.settings.Skill,
+private fun SkillInstallPanel(
     onDismiss: () -> Unit,
-    onSave: (com.nitronbox.app.data.settings.Skill) -> Unit,
+    onInstall: (String) -> Unit,
 ) {
     val strings = LocalStrings.current
-    var name by remember { mutableStateOf(initial.name) }
-    var prompt by remember { mutableStateOf(initial.prompt) }
+    var url by remember { mutableStateOf("") }
     Column(
         Modifier
             .fillMaxWidth()
@@ -500,30 +496,24 @@ private fun SkillEditor(
             .padding(bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text(
-            if (initial.name.isBlank()) strings.addSkill else initial.name,
-            style = MaterialTheme.typography.headlineSmall,
-            color = NitronTheme.colors.textPrimary,
-        )
+        Text(strings.addSkill, style = MaterialTheme.typography.headlineSmall, color = NitronTheme.colors.textPrimary)
         OutlinedTextField(
-            value = name,
-            onValueChange = { name = it },
-            label = { Text(strings.skillName) },
+            value = url,
+            onValueChange = { url = it },
+            label = { Text("github.com/user/repo") },
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
         )
-        OutlinedTextField(
-            value = prompt,
-            onValueChange = { prompt = it },
-            label = { Text(strings.skillPrompt) },
-            minLines = 4,
-            modifier = Modifier.fillMaxWidth(),
+        Text(
+            "SKILL.md / README.md из репозитория станет инструкцией для модели",
+            style = MaterialTheme.typography.labelSmall,
+            color = NitronTheme.colors.textTertiary,
         )
         Button(
-            onClick = { onSave(initial.copy(name = name.trim(), prompt = prompt.trim())) },
-            enabled = name.isNotBlank() && prompt.isNotBlank(),
+            onClick = { onInstall(url) },
+            enabled = url.isNotBlank(),
             modifier = Modifier.fillMaxWidth(),
-        ) { Text(strings.save) }
+        ) { Text(strings.install) }
     }
 }
 

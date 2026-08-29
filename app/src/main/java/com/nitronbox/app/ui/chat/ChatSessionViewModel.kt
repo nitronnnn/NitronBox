@@ -10,6 +10,8 @@ import com.nitronbox.app.data.local.ChatRepository
 import com.nitronbox.app.data.local.ConversationEntity
 import com.nitronbox.app.data.model.AttachmentReference
 import com.nitronbox.app.data.model.ChatMessage
+import com.nitronbox.app.data.model.MessageRole
+import com.nitronbox.app.data.model.MessageStatus
 import com.nitronbox.app.data.model.ModelRoute
 import com.nitronbox.app.data.model.ModelTarget
 import com.nitronbox.app.data.model.Workspace
@@ -103,8 +105,11 @@ class ChatSessionViewModel(private val container: AppContainer) : ViewModel() {
         ((chars / CHARS_PER_TOKEN_ESTIMATE) / budget).toFloat().coerceIn(0f, 1f)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0f)
 
-    private val _isStreaming = MutableStateFlow(false)
-    val isStreaming: StateFlow<Boolean> = _isStreaming.asStateFlow()
+    private val _streamingIds = MutableStateFlow<Set<String>>(emptySet())
+    val streamingConversationIds: StateFlow<Set<String>> = _streamingIds.asStateFlow()
+
+    /** One generation job per conversation - chats generate independently. */
+    private val generationJobs = MutableStateFlow<Map<String, Job>>(emptyMap())
 
     private val _draft = MutableStateFlow("")
     val draft: StateFlow<String> = _draft.asStateFlow()
@@ -119,7 +124,6 @@ class ChatSessionViewModel(private val container: AppContainer) : ViewModel() {
         .map { profiles -> container.providerRegistryFactory.create(profiles) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
-    private var generationJob: Job? = null
 
     // --- Creator mode ---
 
@@ -128,6 +132,16 @@ class ChatSessionViewModel(private val container: AppContainer) : ViewModel() {
 
     val creatorFolderUri: StateFlow<String?> = settings.activeCreatorFolder
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    val creatorFolders: StateFlow<Set<String>> = settings.creatorFolders
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptySet())
+
+    fun selectCreatorFolder(uri: String) {
+        viewModelScope.launch {
+            settings.setActiveCreatorFolder(uri)
+            settings.setActiveConversation(null)
+        }
+    }
 
     fun setCreatorMode(enabled: Boolean) {
         _creatorMode.value = enabled
@@ -141,6 +155,7 @@ class ChatSessionViewModel(private val container: AppContainer) : ViewModel() {
                     android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or
                         android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
                 )
+                settings.addCreatorFolder(uri.toString())
                 settings.setActiveCreatorFolder(uri.toString())
             }.onFailure { emit("Unable to use this folder") }
         }
@@ -310,15 +325,15 @@ class ChatSessionViewModel(private val container: AppContainer) : ViewModel() {
             emit("Select a provider and model in Settings first.")
             return
         }
-        if (_isStreaming.value) return
+        val currentIdForSend = activeConversation.value?.id
+        if (currentIdForSend != null && generationJobs.value.containsKey(currentIdForSend)) return
         val attachments = _pendingAttachments.value
         _draft.value = ""
         _pendingAttachments.value = emptyList()
-        val conversationId = activeConversation.value?.id
-        generationJob = viewModelScope.launch {
+        viewModelScope.launch {
             try {
-                val prepared = service.prepareUserMessage(workspace, conversationId, text, attachments)
-                if (conversationId != prepared.conversationId) {
+                val prepared = service.prepareUserMessage(workspace, currentIdForSend, text, attachments)
+                if (currentIdForSend != prepared.conversationId) {
                     settings.setActiveConversation(prepared.conversationId)
                 }
                 // Creator chats get filesystem tools rooted at their project folder.
@@ -327,14 +342,19 @@ class ChatSessionViewModel(private val container: AppContainer) : ViewModel() {
                 val creatorTools = folderUri?.let { container.creatorFileTools.rootFor(it) }?.let {
                     container.creatorFileTools
                 }
-                runGeneration(
-                    conversationId = prepared.conversationId,
-                    workspace = workspace,
-                    target = ModelTarget(model.providerId, model.modelId, model.displayName),
-                    creatorTools = creatorTools,
-                    creatorRootUri = if (creatorTools != null) folderUri else null,
-                    skills = settings.loadSkills(),
-                )
+                generationJobs.value = generationJobs.value + (prepared.conversationId to kotlin.coroutines.coroutineContext[Job]!!)
+                try {
+                    runGeneration(
+                        conversationId = prepared.conversationId,
+                        workspace = workspace,
+                        target = ModelTarget(model.providerId, model.modelId, model.displayName),
+                        creatorTools = creatorTools,
+                        creatorRootUri = if (creatorTools != null) folderUri else null,
+                        skills = settings.loadSkills(),
+                    )
+                } finally {
+                    generationJobs.value = generationJobs.value - prepared.conversationId
+                }
             } catch (failure: Exception) {
                 _draft.value = _draft.value.ifBlank { text }
                 emit(failure.message ?: "Unable to send the message")
@@ -351,7 +371,7 @@ class ChatSessionViewModel(private val container: AppContainer) : ViewModel() {
         skills: List<com.nitronbox.app.data.settings.Skill> = emptyList(),
     ) {
         val registry = registryFlow.value ?: container.loadRegistry()
-        _isStreaming.value = true
+        _streamingIds.value = _streamingIds.value + conversationId
         try {
             when (
                 val outcome = service.generateReply(
@@ -368,12 +388,48 @@ class ChatSessionViewModel(private val container: AppContainer) : ViewModel() {
                 else -> Unit
             }
         } finally {
-            _isStreaming.value = false
+            _streamingIds.value = _streamingIds.value - conversationId
         }
     }
 
     fun stopGeneration() {
-        generationJob?.cancel()
+        activeConversation.value?.id?.let { id ->
+            generationJobs.value[id]?.cancel()
+            generationJobs.value = generationJobs.value - id
+        }
+    }
+
+    /** Re-sends a user message as a fresh turn and generates a new answer for it. */
+    fun repeatUserMessage(messageId: String) {
+        val workspace = activeWorkspace.value ?: return
+        val model = activeModel.value ?: run {
+            emit("Select a provider and model in Settings first.")
+            return
+        }
+        viewModelScope.launch {
+            val original = repository.message(messageId) ?: return@launch
+            if (original.role != MessageRole.USER) return@launch
+            val resent = original.copy(
+                id = com.nitronbox.app.data.local.ChatRepository.newId(),
+                createdAtEpochMillis = System.currentTimeMillis(),
+                status = MessageStatus.COMPLETE,
+                errorText = null,
+            )
+            repository.saveMessage(resent)
+            repository.touchConversation(resent.conversationId)
+            if (_streamingIds.value.contains(resent.conversationId)) return@launch
+            generationJobs.value = generationJobs.value + (resent.conversationId to kotlin.coroutines.coroutineContext[Job]!!)
+            try {
+                runGeneration(
+                    conversationId = resent.conversationId,
+                    workspace = workspace,
+                    target = ModelTarget(model.providerId, model.modelId, model.displayName),
+                    skills = settings.loadSkills(),
+                )
+            } finally {
+                generationJobs.value = generationJobs.value - resent.conversationId
+            }
+        }
     }
 
     /** Retries a failed reply or regenerates an existing assistant answer. */
@@ -383,15 +439,21 @@ class ChatSessionViewModel(private val container: AppContainer) : ViewModel() {
             emit("Select a provider and model in Settings first.")
             return
         }
-        if (_isStreaming.value) return
-        generationJob = viewModelScope.launch {
+        viewModelScope.launch {
+            val convId = repository.message(messageId)?.conversationId
+            if (_streamingIds.value.contains(convId)) return@launch
             val conversationId = service.deleteForRetry(messageId) ?: return@launch
-            runGeneration(
-                conversationId = conversationId,
-                workspace = workspace,
-                target = ModelTarget(model.providerId, model.modelId, model.displayName),
-                skills = settings.loadSkills(),
-            )
+            generationJobs.value = generationJobs.value + (conversationId to kotlin.coroutines.coroutineContext[Job]!!)
+            try {
+                runGeneration(
+                    conversationId = conversationId,
+                    workspace = workspace,
+                    target = ModelTarget(model.providerId, model.modelId, model.displayName),
+                    skills = settings.loadSkills(),
+                )
+            } finally {
+                generationJobs.value = generationJobs.value - conversationId
+            }
         }
     }
 

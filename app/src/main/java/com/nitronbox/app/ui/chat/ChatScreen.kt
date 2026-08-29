@@ -105,7 +105,6 @@ import com.nitronbox.app.data.model.ChatMessage
 import com.nitronbox.app.data.model.MessageRole
 import com.nitronbox.app.data.model.MessageStatus
 import com.nitronbox.app.ui.components.ConversationsPanel
-import com.nitronbox.app.ui.components.FrostSurface
 import com.nitronbox.app.ui.components.LocalWallpaperGeometry
 import com.nitronbox.app.ui.components.WallpaperGeometry
 import com.nitronbox.app.ui.components.NitronCenterDialog
@@ -140,7 +139,8 @@ fun ChatScreen(
     val conversation by viewModel.activeConversation.collectAsState()
     val model by viewModel.activeModel.collectAsState()
     val draft by viewModel.draft.collectAsState()
-    val streaming by viewModel.isStreaming.collectAsState()
+    val streamingIds by viewModel.streamingConversationIds.collectAsState()
+    val streaming = streamingIds.contains(conversation?.id)
     val pendingAttachments by viewModel.pendingAttachments.collectAsState()
     val contextUsage by viewModel.contextUsage.collectAsState()
     val messages = viewModel.messages.collectAsLazyPagingItems()
@@ -244,6 +244,7 @@ fun ChatScreen(
                                     message = message,
                                     onRegenerate = { viewModel.regenerate(message.id) },
                                     onDelete = { viewModel.deleteMessage(message.id) },
+                                    onRepeat = { viewModel.repeatUserMessage(message.id) },
                                     onOpenAttachment = { attachment -> openAttachment(context, viewModel, attachment) },
                                     onCopy = { content ->
                                         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
@@ -335,6 +336,7 @@ fun ChatScreen(
                 ModelPickerSheet(
                     viewModel = viewModel,
                     onDismiss = { modelPickerOpen = false },
+                    modifier = Modifier.align(Alignment.BottomCenter),
                     onOpenSettings = {
                         modelPickerOpen = false
                         onOpenSettings()
@@ -582,6 +584,7 @@ private fun MessageBubble(
     message: ChatMessage,
     onRegenerate: () -> Unit,
     onDelete: () -> Unit,
+    onRepeat: () -> Unit,
     onOpenAttachment: (com.nitronbox.app.data.model.AttachmentReference) -> Unit,
     onCopy: (String) -> Unit,
 ) {
@@ -766,6 +769,15 @@ private fun MessageBubble(
                                     onClick = {
                                         actionsOpen = false
                                         onRegenerate()
+                                    },
+                                )
+                            }
+                            if (isUser) {
+                                DropdownMenuItem(
+                                    text = { Text(strings.repeat) },
+                                    onClick = {
+                                        actionsOpen = false
+                                        onRepeat()
                                     },
                                 )
                             }

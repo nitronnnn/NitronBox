@@ -69,6 +69,7 @@ fun ConversationsPanel(
     val workspaces by viewModel.workspaces.collectAsState()
     val activeWorkspace by viewModel.activeWorkspace.collectAsState()
     val creatorFolder by viewModel.creatorFolderUri.collectAsState()
+    val creatorFolders by viewModel.creatorFolders.collectAsState()
 
     val folderPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         uri?.let(viewModel::pickCreatorFolder)
@@ -101,21 +102,39 @@ fun ConversationsPanel(
                     .nitronSurface(SurfaceLevel.Raised, NitronTheme.shapes.medium)
                     .padding(10.dp),
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Rounded.Folder, null, tint = NitronTheme.colors.accent, modifier = Modifier.height(16.dp))
-                    Spacer(Modifier.padding(3.dp))
-                    Text(
-                        creatorFolder?.let(viewModel::folderDisplayName) ?: strings.noFolderHint,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = if (creatorFolder != null) NitronTheme.colors.textPrimary else NitronTheme.colors.textSecondary,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f),
-                    )
+                // Every added folder is listed; the selected one is used for new chats.
+                creatorFolders.forEach { folder ->
+                    val selected = folder == creatorFolder
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .pressableRipple(shape = NitronTheme.shapes.small) { viewModel.selectCreatorFolder(folder) }
+                            .padding(horizontal = 4.dp, vertical = 5.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(
+                            Icons.Rounded.Folder,
+                            null,
+                            tint = if (selected) NitronTheme.colors.accent else NitronTheme.colors.textTertiary,
+                            modifier = Modifier.height(15.dp),
+                        )
+                        Spacer(Modifier.padding(3.dp))
+                        Text(
+                            viewModel.folderDisplayName(folder),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = if (selected) NitronTheme.colors.textPrimary else NitronTheme.colors.textSecondary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f),
+                        )
+                        if (selected) {
+                            Text(strings.active, style = MaterialTheme.typography.labelSmall, color = NitronTheme.colors.accent)
+                        }
+                    }
                 }
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(6.dp))
                 Text(
-                    strings.chooseFolder,
+                    "+ " + strings.chooseFolder,
                     style = MaterialTheme.typography.labelLarge,
                     color = NitronTheme.colors.accent,
                     modifier = Modifier.pressableRipple(shape = NitronTheme.shapes.small) { folderPicker.launch(null) },

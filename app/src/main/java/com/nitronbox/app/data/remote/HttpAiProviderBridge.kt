@@ -99,7 +99,13 @@ class HttpAiProviderBridge(
             .header("X-Request-ID", request.requestId)
             .build()
 
-        execute(httpRequest).use { response ->
+        val call = client.newCall(httpRequest)
+        val job: kotlinx.coroutines.Job? = kotlinx.coroutines.currentCoroutineContext()[kotlinx.coroutines.Job]
+        // Public 1-arg hook: cancels the HTTP call when the collector completes or is cancelled
+        // (calling cancel() on a finished call is a no-op).
+        val cancelHook = job?.invokeOnCompletion { call.cancel() }
+        try {
+        call.execute().use { response ->
             if (!response.isSuccessful) {
                 requireSuccess(response.code, response.body?.string(), "streaming chat")
             }
@@ -116,6 +122,9 @@ class HttpAiProviderBridge(
                 if (payload == "[DONE]") break
                 parseStreamPayload(payload).forEach { emit(it) }
             }
+        }
+        } finally {
+            cancelHook?.dispose()
         }
     }.flowOn(Dispatchers.IO)
 

@@ -87,6 +87,7 @@ class AppContainer(application: Application) {
     val contentResolver = application.contentResolver
     val filesDir: java.io.File = application.filesDir
     val creatorFileTools = com.nitronbox.app.data.filesystem.CreatorFileTools(application)
+    val gitHubSkillInstaller = com.nitronbox.app.data.skills.GitHubSkillInstaller(httpClient)
 
     val contextWindowEngine: ContextWindowEngine by lazy {
         val summarizer = LlmConversationSummarizer(

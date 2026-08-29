@@ -114,6 +114,16 @@ class AppSettings(private val context: Context) {
     /** SAF tree of the project folder used by Creator-mode chats. */
     val activeCreatorFolder: Flow<String?> = context.dataStore.data.map { it[KEY_CREATOR_FOLDER] }
 
+    /** All Creator folders the user has added. */
+    val creatorFolders: Flow<Set<String>> = context.dataStore.data.map { prefs ->
+        prefs[KEY_CREATOR_FOLDERS]?.split("\n")?.filter { it.isNotBlank() }?.toSet() ?: emptySet()
+    }
+
+    suspend fun addCreatorFolder(uri: String) = context.dataStore.edit { prefs ->
+        val updated = (prefs[KEY_CREATOR_FOLDERS]?.split("\n")?.filter { it.isNotBlank() }?.toSet() ?: emptySet()) + uri
+        prefs[KEY_CREATOR_FOLDERS] = updated.joinToString("\n")
+    }
+
     suspend fun setActiveCreatorFolder(uri: String?) = context.dataStore.edit { prefs ->
         if (uri == null) prefs.remove(KEY_CREATOR_FOLDER) else prefs[KEY_CREATOR_FOLDER] = uri
     }
@@ -183,6 +193,7 @@ class AppSettings(private val context: Context) {
         val KEY_WALLPAPER_URI = stringPreferencesKey("wallpaper_image_uri")
         val KEY_DEFAULTS_MIGRATED = stringPreferencesKey("legacy_defaults_migrated")
         val KEY_CREATOR_FOLDER = stringPreferencesKey("creator_folder_uri")
+        val KEY_CREATOR_FOLDERS = stringPreferencesKey("creator_folder_uris")
         val KEY_SKILLS = stringPreferencesKey("skills_json")
         val KEY_BLUR_ENABLED = booleanPreferencesKey("blur_enabled")
         val KEY_BLUR_STRENGTH = floatPreferencesKey("blur_strength")
