@@ -2,20 +2,6 @@
 
 Production-oriented Android architecture for a deeply customizable, multi-provider AI workspace client. The project uses Kotlin, Jetpack Compose, Room, Paging 3, OkHttp streaming, kotlinx serialization, SAF, and Android Keystore. It targets Android API 35 while retaining `minSdk 26` compatibility.
 
-## Visual direction: Liquid Glass
-
-The UI is a native Compose interpretation of the iOS 26 spatial/Liquid Glass language—not a Material theme with reduced opacity:
-
-- sampled superellipse (`SquircleShape`) continuous corners;
-- layered translucent tint, highlights, fine borders, ambient gradients, and depth shadows;
-- spring-scale press interactions and emphasized easing tokens;
-- edge-to-edge floating header/composer and spatial message hierarchy;
-- API 31+ Compose `BlurEffect` for decorative ambient depth;
-- API 26–30 static radial gradients and translucent overlays without realtime blur;
-- workspace-controlled palette, font source, scale, glass depth, and reduced motion.
-
-Android cannot sample and blur arbitrary content behind a composable with the same private system compositor used by Apple. The implementation therefore blurs controlled ambient source layers and uses a performant glass material for interactive surfaces. This avoids repeated offscreen captures and old-device frame drops.
-
 ## Architecture
 
 ```text
