@@ -120,6 +120,8 @@ import com.nitronbox.app.ui.theme.LocalUiFx
 import com.nitronbox.app.ui.theme.NitronTheme
 import com.nitronbox.app.ui.theme.SurfaceLevel
 import com.nitronbox.app.ui.theme.WallpaperBackdrop
+import com.nitronbox.app.ui.theme.glassMenu
+import com.nitronbox.app.ui.theme.glassMenuColor
 import com.nitronbox.app.ui.theme.liquidGlassActive
 import com.nitronbox.app.ui.theme.liquidGlassPanel
 import com.nitronbox.app.ui.theme.nitronSurface
@@ -128,6 +130,8 @@ import com.nitronbox.app.ui.components.frostPanel
 import com.nitronbox.app.ui.theme.pressableRipple
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
+import dev.chrisbanes.haze.HazeProgressive
+import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.contentOrNull
@@ -233,9 +237,11 @@ fun ChatScreen(
                 Modifier
                     .fillMaxSize()
                     .then(
-                        if (contentBackdrop != null) Modifier.layerBackdrop(contentBackdrop)
-                        else Modifier.hazeSource(hazeState),
-                    ),
+                        if (contentBackdrop != null) Modifier.layerBackdrop(contentBackdrop) else Modifier,
+                    )
+                    // Always a haze source (even in Liquid Glass): the progressive top-blur
+                    // strip under the header samples it.
+                    .hazeSource(hazeState),
             ) {
                 WallpaperBackdrop(
                     wallpaper,
@@ -297,6 +303,22 @@ fun ChatScreen(
 
                 }
                 }
+
+                // Progressive blur under the header: messages scrolling by dissolve into the
+                // blur instead of visually merging with the header panel.
+                Box(
+                    Modifier
+                        .align(Alignment.TopCenter)
+                        .fillMaxWidth()
+                        .height(statusTopForHeader() + 118.dp)
+                        .hazeEffect(hazeState) {
+                            backgroundColor = Color.Transparent
+                            tints = emptyList()
+                            this.blurRadius = 18.dp
+                            noiseFactor = 0f
+                            progressive = HazeProgressive.verticalGradient(startIntensity = 1f, endIntensity = 0f)
+                        },
+                )
 
                 ChatHeader(
                     title = conversation?.title ?: workspace?.name ?: "NitronBox",
@@ -813,7 +835,12 @@ private fun MessageBubble(
                         Spacer(Modifier.weight(1f))
                     }
                     Box(contentAlignment = Alignment.CenterEnd) {
-                        DropdownMenu(expanded = actionsOpen, onDismissRequest = { actionsOpen = false }) {
+                        DropdownMenu(
+                            expanded = actionsOpen,
+                            onDismissRequest = { actionsOpen = false },
+                            modifier = Modifier.glassMenu(),
+                            containerColor = glassMenuColor(),
+                        ) {
                             DropdownMenuItem(
                                 text = { Text(strings.copyText) },
                                 onClick = {

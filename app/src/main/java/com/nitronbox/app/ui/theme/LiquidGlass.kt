@@ -5,7 +5,9 @@ import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.Backdrop
 import com.kyant.backdrop.drawBackdrop
@@ -39,14 +41,14 @@ val liquidGlassActive: Boolean
  */
 fun Modifier.liquidGlassPanel(backdrop: Backdrop, shape: Shape): Modifier = composed {
     val colors = NitronTheme.colors
-    val tint = colors.background.copy(alpha = if (colors.isDark) 0.36f else 0.52f)
+    val tint = colors.background.copy(alpha = if (colors.isDark) 0.30f else 0.44f)
     drawBackdrop(
         backdrop = backdrop,
         shape = { shape },
         effects = {
             vibrancy()
-            blur(8.dp.toPx())
-            lens(12.dp.toPx(), 24.dp.toPx(), depthEffect = false)
+            blur(10.dp.toPx())
+            lens(18.dp.toPx(), 52.dp.toPx(), depthEffect = true)
         },
         onDrawSurface = { drawRect(tint) },
     )
@@ -58,16 +60,44 @@ fun Modifier.liquidGlassPanel(backdrop: Backdrop, shape: Shape): Modifier = comp
  */
 fun Modifier.liquidGlassBubble(backdrop: Backdrop, shape: Shape): Modifier = composed {
     val colors = NitronTheme.colors
-    val tint = colors.background.copy(alpha = if (colors.isDark) 0.42f else 0.58f)
+    val tint = colors.background.copy(alpha = if (colors.isDark) 0.34f else 0.50f)
     drawBackdrop(
         backdrop = backdrop,
         shape = { shape },
         shadow = null,
         effects = {
             vibrancy()
-            blur(6.dp.toPx())
-            lens(10.dp.toPx(), 20.dp.toPx(), depthEffect = false)
+            blur(8.dp.toPx())
+            lens(14.dp.toPx(), 36.dp.toPx(), depthEffect = true)
         },
         onDrawSurface = { drawRect(tint) },
     )
 }
+
+/**
+ * Flat surface normally, Liquid Glass when a content backdrop is available. Use ONLY for
+ * surfaces that are NOT rendered inside the recorded content layer (settings cards, drawer
+ * rows, sheets): anything inside the layer must keep sampling the wallpaper backdrop instead.
+ */
+@Composable
+fun Modifier.glassOrSurface(level: SurfaceLevel, shape: Shape): Modifier {
+    val backdrop = LocalLiquidContentBackdrop.current
+    return if (backdrop != null) {
+        liquidGlassPanel(backdrop, shape).pointerInput(Unit) {}
+    } else {
+        nitronSurface(level, shape)
+    }
+}
+
+/** Liquid Glass background for a DropdownMenu when the style is active; no-op otherwise. */
+@Composable
+fun Modifier.glassMenu(): Modifier {
+    val backdrop = LocalLiquidContentBackdrop.current
+    return if (backdrop != null) liquidGlassPanel(backdrop, NitronTheme.shapes.medium) else this
+}
+
+/** Transparent menu container in Liquid Glass mode (the glass draws the surface instead). */
+@Composable
+fun glassMenuColor(): Color =
+    if (LocalLiquidContentBackdrop.current != null) Color.Transparent
+    else androidx.compose.material3.MaterialTheme.colorScheme.surfaceContainer

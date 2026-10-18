@@ -45,6 +45,8 @@ import com.nitronbox.app.ui.chat.ChatSessionViewModel
 import com.nitronbox.app.ui.i18n.LocalStrings
 import com.nitronbox.app.ui.theme.NitronTheme
 import com.nitronbox.app.ui.theme.SurfaceLevel
+import com.nitronbox.app.ui.theme.glassMenu
+import com.nitronbox.app.ui.theme.glassMenuColor
 import com.nitronbox.app.ui.theme.nitronSurface
 import com.nitronbox.app.ui.theme.pressableRipple
 import java.text.DateFormat
@@ -225,7 +227,12 @@ fun ConversationsPanel(
                                 modifier = Modifier.height(16.dp),
                             )
                         }
-                        DropdownMenu(expanded = actionsOpen, onDismissRequest = { actionsOpen = false }) {
+                        DropdownMenu(
+                            expanded = actionsOpen,
+                            onDismissRequest = { actionsOpen = false },
+                            modifier = Modifier.glassMenu(),
+                            containerColor = glassMenuColor(),
+                        ) {
                             DropdownMenuItem(
                                 text = { Text(strings.rename) },
                                 leadingIcon = { Icon(Icons.Rounded.Edit, null) },

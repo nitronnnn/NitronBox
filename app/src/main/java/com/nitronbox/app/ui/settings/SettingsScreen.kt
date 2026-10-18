@@ -69,9 +69,16 @@ import com.nitronbox.app.data.settings.LanguageSetting
 import com.nitronbox.app.data.settings.ThemeModeSetting
 import com.nitronbox.app.data.settings.UiStyleSetting
 import com.nitronbox.app.ui.i18n.LocalStrings
+import com.nitronbox.app.ui.theme.LocalLiquidContentBackdrop
+import com.nitronbox.app.ui.theme.LocalUiFx
 import com.nitronbox.app.ui.theme.NitronTheme
 import com.nitronbox.app.ui.theme.SurfaceLevel
-import com.nitronbox.app.ui.theme.nitronSurface
+import com.nitronbox.app.ui.theme.WallpaperBackdrop
+import com.nitronbox.app.ui.theme.glassMenu
+import com.nitronbox.app.ui.theme.glassMenuColor
+import com.nitronbox.app.ui.theme.glassOrSurface
+import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import androidx.compose.material3.Switch
 import com.nitronbox.app.ui.components.AnimatedSegmented
 import com.nitronbox.app.ui.components.NitronBottomPanel
@@ -133,8 +140,32 @@ fun SettingsScreen(
     val galleryImages by viewModel.galleryImages.collectAsState()
 
     val hazeState = androidx.compose.runtime.remember { dev.chrisbanes.haze.HazeState() }
-    androidx.compose.runtime.CompositionLocalProvider(LocalHazeState provides hazeState) {
-    Box(modifier.fillMaxSize().background(NitronTheme.colors.background)) {
+    // Liquid Glass: only the wallpaper is recorded here — the cards ARE the content, so a
+    // content recording would leave them nothing safe to sample (a surface sampling the layer
+    // it is drawn into recurses the render tree). Cards refract this wallpaper backdrop.
+    val liquid = uiStyle == UiStyleSetting.LIQUID_GLASS
+    val glassBaseColor = NitronTheme.colors.background
+    val glassBackdrop = if (liquid) {
+        rememberLayerBackdrop { drawRect(glassBaseColor); drawContent() }
+    } else {
+        null
+    }
+    val fx = LocalUiFx.current
+    androidx.compose.runtime.CompositionLocalProvider(
+        LocalHazeState provides hazeState,
+        LocalLiquidContentBackdrop provides glassBackdrop,
+    ) {
+    Box(modifier.fillMaxSize().then(if (glassBackdrop == null) Modifier.background(NitronTheme.colors.background) else Modifier)) {
+    if (glassBackdrop != null) {
+        WallpaperBackdrop(
+            wallpaper,
+            wallpaperImageUri,
+            Modifier
+                .matchParentSize()
+                .then(Modifier.layerBackdrop(glassBackdrop))
+                .blur(if (fx.blurEnabled) fx.blurRadius.dp else 0.dp),
+        )
+    }
     Scaffold(
         modifier = Modifier
             .fillMaxSize()
@@ -148,12 +179,12 @@ fun SettingsScreen(
                     }
                 },
                 colors = androidx.compose.material3.TopAppBarDefaults.topAppBarColors(
-                    containerColor = NitronTheme.colors.background,
+                    containerColor = if (glassBackdrop != null) Color.Transparent else NitronTheme.colors.background,
                 ),
             )
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
-        containerColor = NitronTheme.colors.background,
+        containerColor = if (glassBackdrop != null) Color.Transparent else NitronTheme.colors.background,
     ) { padding ->
         LazyColumn(
             Modifier
@@ -187,7 +218,7 @@ fun SettingsScreen(
                             style = MaterialTheme.typography.labelLarge,
                             color = NitronTheme.colors.textPrimary,
                             modifier = Modifier
-                                .nitronSurface(SurfaceLevel.Raised, NitronTheme.shapes.pill)
+                                .glassOrSurface(SurfaceLevel.Raised, NitronTheme.shapes.pill)
                                 .pressableRipple(shape = NitronTheme.shapes.pill) { prefill = template }
                                 .padding(horizontal = 14.dp, vertical = 9.dp),
                         )
@@ -230,7 +261,7 @@ fun SettingsScreen(
                 Column(
                     Modifier
                         .fillMaxWidth()
-                        .nitronSurface(SurfaceLevel.Raised, NitronTheme.shapes.medium)
+                        .glassOrSurface(SurfaceLevel.Raised, NitronTheme.shapes.medium)
                         .padding(14.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
@@ -316,7 +347,7 @@ fun SettingsScreen(
                     Row(
                         Modifier
                             .fillMaxWidth()
-                            .nitronSurface(SurfaceLevel.Muted, NitronTheme.shapes.small)
+                            .glassOrSurface(SurfaceLevel.Muted, NitronTheme.shapes.small)
                             .pressableRipple(shape = NitronTheme.shapes.small) { wallpaperOpen = true }
                             .padding(12.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -365,7 +396,7 @@ fun SettingsScreen(
                 Column(
                     Modifier
                         .fillMaxWidth()
-                        .nitronSurface(SurfaceLevel.Raised, NitronTheme.shapes.medium)
+                        .glassOrSurface(SurfaceLevel.Raised, NitronTheme.shapes.medium)
                         .padding(12.dp),
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -626,7 +657,7 @@ private fun WallpaperPanel(
                         Box(
                             Modifier
                                 .size(width = 62.dp, height = 42.dp)
-                                .nitronSurface(SurfaceLevel.Raised, NitronTheme.shapes.small)
+                                .glassOrSurface(SurfaceLevel.Raised, NitronTheme.shapes.small)
                                 .then(
                                     if (isSelected) {
                                         Modifier.border(2.dp, NitronTheme.colors.accent, NitronTheme.shapes.small)
@@ -719,7 +750,7 @@ private fun ProviderCard(
     Column(
         Modifier
             .fillMaxWidth()
-            .nitronSurface(SurfaceLevel.Raised, NitronTheme.shapes.medium)
+            .glassOrSurface(SurfaceLevel.Raised, NitronTheme.shapes.medium)
             .pressableRipple(shape = NitronTheme.shapes.medium, onClick = onEdit)
             .padding(14.dp),
     ) {
@@ -881,7 +912,7 @@ private fun WorkspaceEditor(
     Column(
         Modifier
             .fillMaxWidth()
-            .nitronSurface(SurfaceLevel.Raised, NitronTheme.shapes.medium)
+            .glassOrSurface(SurfaceLevel.Raised, NitronTheme.shapes.medium)
             .padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
@@ -945,7 +976,12 @@ private fun WorkspaceEditor(
                 },
                 modifier = Modifier.fillMaxWidth(),
             )
-            DropdownMenu(expanded = strategyMenuOpen, onDismissRequest = { strategyMenuOpen = false }) {
+            DropdownMenu(
+                expanded = strategyMenuOpen,
+                onDismissRequest = { strategyMenuOpen = false },
+                modifier = Modifier.glassMenu(),
+                containerColor = glassMenuColor(),
+            ) {
                 ContextOverflowStrategy.entries.forEach { entry ->
                     DropdownMenuItem(
                         text = { Text(entry.name.lowercase().replace('_', ' ')) },
