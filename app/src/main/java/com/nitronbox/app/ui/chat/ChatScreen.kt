@@ -114,13 +114,19 @@ import com.nitronbox.app.ui.components.ModelPickerSheet
 import com.nitronbox.app.ui.chat.components.MarkdownRenderer
 import com.nitronbox.app.ui.i18n.LocalStrings
 import com.nitronbox.app.ui.theme.LocalHazeState
+import com.nitronbox.app.ui.theme.LocalLiquidContentBackdrop
+import com.nitronbox.app.ui.theme.LocalLiquidWallpaperBackdrop
 import com.nitronbox.app.ui.theme.LocalUiFx
 import com.nitronbox.app.ui.theme.NitronTheme
 import com.nitronbox.app.ui.theme.SurfaceLevel
 import com.nitronbox.app.ui.theme.WallpaperBackdrop
+import com.nitronbox.app.ui.theme.liquidGlassActive
 import com.nitronbox.app.ui.theme.nitronSurface
+import com.nitronbox.app.ui.components.FrostSurface
 import com.nitronbox.app.ui.components.frostPanel
 import com.nitronbox.app.ui.theme.pressableRipple
+import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import dev.chrisbanes.haze.hazeSource
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.contentOrNull
@@ -168,6 +174,23 @@ fun ChatScreen(
         val wallpaper by viewModel.wallpaper.collectAsState()
         val wallpaperImageUri by viewModel.wallpaperImageUri.collectAsState()
 
+        // Liquid Glass: two recorded layers. The content layer (wallpaper + messages) feeds
+        // panels floating above it; the wallpaper-only layer feeds bubbles inside the content,
+        // which cannot sample the layer they are part of.
+        val liquid = viewModel.uiStyle.collectAsState().value ==
+            com.nitronbox.app.data.settings.UiStyleSetting.LIQUID_GLASS
+        val glassBaseColor = NitronTheme.colors.background
+        val contentBackdrop = if (liquid) {
+            rememberLayerBackdrop { drawRect(glassBaseColor); drawContent() }
+        } else {
+            null
+        }
+        val wallpaperBackdrop = if (liquid) {
+            rememberLayerBackdrop { drawRect(glassBaseColor); drawContent() }
+        } else {
+            null
+        }
+
         // Blur the chat behind any overlay panel (RenderEffect on API 31+, no-op below).
         val blurProgress by animateFloatAsState(
             targetValue = if (modelPickerOpen || conversationsOpen) 1f else 0f,
@@ -196,17 +219,32 @@ fun ChatScreen(
         ) {
             androidx.compose.runtime.CompositionLocalProvider(
                 LocalWallpaperGeometry provides wallpaperGeometry,
+                LocalLiquidContentBackdrop provides contentBackdrop,
+                LocalLiquidWallpaperBackdrop provides wallpaperBackdrop,
             ) {
             // Content is the haze source; frosted surfaces above blur it for real.
             // The content itself also blurs while an overlay is open.
             // Content behind the open drawer/picker always blurs — constant, not a setting.
             Box(Modifier.fillMaxSize().blur(24.dp * blurProgress)) {
-            Box(Modifier.fillMaxSize().hazeSource(hazeState)) {
+            // In Liquid Glass mode the content records itself into the backdrop layer instead
+            // of the haze snapshot; glass panels sample it via Modifier.drawBackdrop.
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .then(
+                        if (contentBackdrop != null) Modifier.layerBackdrop(contentBackdrop)
+                        else Modifier.hazeSource(hazeState),
+                    ),
+            ) {
                 WallpaperBackdrop(
                     wallpaper,
                     wallpaperImageUri,
                     Modifier
                         .matchParentSize()
+                        .then(
+                            if (wallpaperBackdrop != null) Modifier.layerBackdrop(wallpaperBackdrop)
+                            else Modifier,
+                        )
                         .blur(if (fx.blurEnabled) fx.blurRadius.dp else 0.dp)
                         .onGloballyPositioned { wallpaperTop = it.positionInRoot().y }
                         .graphicsLayer { translationY = parallax * 0.12f },
@@ -495,10 +533,16 @@ private fun ChatHeader(
     modifier: Modifier = Modifier,
 ) {
     val strings = LocalStrings.current
+    // Glass panels carry their own highlight rim; the flat hairline only suits the flat style.
+    val flatBorder = if (liquidGlassActive) {
+        Modifier
+    } else {
+        Modifier.border(1.dp, NitronTheme.colors.border, NitronTheme.shapes.large)
+    }
     Row(
         modifier
             .frostPanel(NitronTheme.shapes.large)
-            .border(1.dp, NitronTheme.colors.border, NitronTheme.shapes.large)
+            .then(flatBorder)
             .padding(horizontal = 6.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -611,12 +655,14 @@ private fun MessageBubble(
         Modifier.fillMaxWidth(),
         horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start,
     ) {
+        FrostSurface(
+            NitronTheme.shapes.large,
+            Modifier
+                .widthIn(max = 640.dp)
+                .fillMaxWidth(if (isUser) 0.85f else 0.96f),
+        ) {
         Column(
-            bubbleSurface(
-                Modifier
-                    .widthIn(max = 640.dp)
-                    .fillMaxWidth(if (isUser) 0.85f else 0.96f),
-            )
+            Modifier
                 .combinedClickable(
                     onClick = {},
                     onLongClick = { actionsOpen = true },
@@ -798,6 +844,7 @@ private fun MessageBubble(
                     }
                 }
             }
+        }
         }
     }
 }

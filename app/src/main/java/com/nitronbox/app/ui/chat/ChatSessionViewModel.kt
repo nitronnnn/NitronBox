@@ -87,6 +87,9 @@ class ChatSessionViewModel(private val container: AppContainer) : ViewModel() {
     val wallpaperImageUri: StateFlow<String?> = settings.wallpaperImageUri
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
+    val uiStyle: StateFlow<com.nitronbox.app.data.settings.UiStyleSetting> = settings.uiStyle
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), com.nitronbox.app.data.settings.UiStyleSetting.FLAT)
+
     val messages: kotlinx.coroutines.flow.Flow<PagingData<ChatMessage>> = settings.activeConversationId
         .flatMapLatest { id ->
             id?.let { repository.messages(it) } ?: flowOf<PagingData<ChatMessage>>(PagingData.empty())

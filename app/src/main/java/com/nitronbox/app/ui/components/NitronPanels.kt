@@ -49,8 +49,12 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.nitronbox.app.data.settings.WallpaperPreset
 import com.nitronbox.app.ui.theme.LocalHazeState
+import com.nitronbox.app.ui.theme.LocalLiquidContentBackdrop
+import com.nitronbox.app.ui.theme.LocalLiquidWallpaperBackdrop
 import com.nitronbox.app.ui.theme.LocalUiFx
 import com.nitronbox.app.ui.theme.NitronTheme
+import com.nitronbox.app.ui.theme.liquidGlassBubble
+import com.nitronbox.app.ui.theme.liquidGlassPanel
 
 /** Fading black scrim that swallows taps to dismiss the overlay beneath it. */
 @Composable
@@ -70,13 +74,19 @@ fun OverlayScrim(
 }
 
 /**
- * Panel surface material: real backdrop blur (Haze) when the screen provides a haze state
- * and frosted panels are enabled; a solid surface otherwise.
+ * Panel surface material. When the Liquid Glass style provides a content backdrop, the panel
+ * refracts it (Kyant Backdrop); otherwise it falls back to real backdrop blur (Haze) when the
+ * screen provides a haze state and frosted panels are enabled, or to a solid surface.
  */
 @Composable
 fun Modifier.frostPanel(shape: androidx.compose.ui.graphics.Shape): Modifier {
     val fx = LocalUiFx.current
     val state = LocalHazeState.current
+    val liquidBackdrop = LocalLiquidContentBackdrop.current
+    if (liquidBackdrop != null) {
+        // drawBackdrop already clips content to the shape.
+        return liquidGlassPanel(liquidBackdrop, shape).pointerInput(Unit) {}
+    }
     val surfaceColor = NitronTheme.colors.background
     val tintColor = surfaceColor.copy(alpha = 0.78f)
     val radius = fx.blurRadius.dp
@@ -222,13 +232,23 @@ fun FrostSurface(
 ) {
     val fx = LocalUiFx.current
     val geo = LocalWallpaperGeometry.current
+    val liquidWallpaper = LocalLiquidWallpaperBackdrop.current
+    if (liquidWallpaper != null) {
+        // Bubbles live inside the content layer, so they refract the wallpaper backdrop only.
+        Box(modifier.liquidGlassBubble(liquidWallpaper, shape)) {
+            content()
+        }
+        return
+    }
     var myTop by remember { mutableStateOf(0f) }
+    val frosted = fx.blurredPanels && geo != null
     Box(
         modifier
             .clip(shape)
+            .background(if (frosted) Color.Transparent else NitronTheme.colors.background)
             .onGloballyPositioned { myTop = it.positionInRoot().y },
     ) {
-        if (geo != null) {
+        if (frosted) {
             com.nitronbox.app.ui.theme.WallpaperBackdrop(
                 geo.preset,
                 geo.imageUri,
@@ -240,7 +260,7 @@ fun FrostSurface(
             Box(
                 Modifier
                     .matchParentSize()
-                    .background(NitronTheme.colors.background.copy(alpha = tintAlpha)),
+                    .background(NitronTheme.colors.background.copy(alpha = tintAlpha * 0.85f)),
             )
         } else {
             Box(Modifier.matchParentSize().background(NitronTheme.colors.background))

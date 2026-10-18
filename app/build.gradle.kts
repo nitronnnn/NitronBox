@@ -2,7 +2,6 @@ import java.util.Properties
 
 plugins {
     alias(libs.plugins.android.application)
-    alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
@@ -17,21 +16,18 @@ val keystoreProperties = Properties().apply {
 
 android {
     namespace = "com.nitronbox.app"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.nitronbox.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 21
-        versionName = "9.6.1"
+        versionCode = 22
+        versionName = "9.7.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
-    }
-
-    androidResources {
-        localeFilters += listOf("en", "ru")
+        androidResources.localeFilters += arrayOf("en", "ru")
     }
 
     signingConfigs {
@@ -70,28 +66,32 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    kotlinOptions {
-        jvmTarget = "17"
-        freeCompilerArgs += listOf(
-            "-Xjvm-default=all",
-            "-opt-in=kotlinx.coroutines.ExperimentalCoroutinesApi",
-            "-opt-in=androidx.compose.foundation.ExperimentalFoundationApi",
-        )
-    }
-
     buildFeatures {
         compose = true
         buildConfig = true
     }
 
     packaging {
-        resources.excludes += setOf(
-            "/META-INF/{AL2.0,LGPL2.1}",
-            "META-INF/DEPENDENCIES",
-        )
+        resources {
+            excludes += arrayOf(
+                "/META-INF/{AL2.0,LGPL2.1}",
+                "META-INF/DEPENDENCIES",
+            )
+        }
     }
 
     testOptions.unitTests.isIncludeAndroidResources = true
+}
+
+// Kotlin compilation options on AGP 9's built-in Kotlin support.
+kotlin {
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+        freeCompilerArgs.addAll(
+            "-opt-in=kotlinx.coroutines.ExperimentalCoroutinesApi",
+            "-opt-in=androidx.compose.foundation.ExperimentalFoundationApi",
+        )
+    }
 }
 
 dependencies {
@@ -130,6 +130,7 @@ dependencies {
     implementation(libs.coil.compose)
     implementation(libs.pdfbox.android)
     implementation(libs.haze)
+    implementation(libs.backdrop)
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.test.junit)

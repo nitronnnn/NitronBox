@@ -67,6 +67,7 @@ import com.nitronbox.app.data.remote.ProviderProfile
 import com.nitronbox.app.data.remote.ProviderProtocol
 import com.nitronbox.app.data.settings.LanguageSetting
 import com.nitronbox.app.data.settings.ThemeModeSetting
+import com.nitronbox.app.data.settings.UiStyleSetting
 import com.nitronbox.app.ui.i18n.LocalStrings
 import com.nitronbox.app.ui.theme.NitronTheme
 import com.nitronbox.app.ui.theme.SurfaceLevel
@@ -109,6 +110,7 @@ fun SettingsScreen(
     val busy by viewModel.busy.collectAsState()
     val workspace by viewModel.activeWorkspace.collectAsState()
     val themeMode by viewModel.themeMode.collectAsState()
+    val uiStyle by viewModel.uiStyle.collectAsState()
     val language by viewModel.language.collectAsState()
     val wallpaper by viewModel.wallpaper.collectAsState()
     val wallpaperImageUri by viewModel.wallpaperImageUri.collectAsState()
@@ -241,6 +243,16 @@ fun SettingsScreen(
                         ),
                         selected = themeMode,
                         onSelect = viewModel::setThemeMode,
+                    )
+                    HorizontalDivider(color = NitronTheme.colors.border)
+                    Text(strings.uiStyle, style = MaterialTheme.typography.labelLarge, color = NitronTheme.colors.textSecondary)
+                    SegmentedSelector(
+                        options = listOf(
+                            strings.uiStyleFlat to UiStyleSetting.FLAT,
+                            strings.uiStyleLiquid to UiStyleSetting.LIQUID_GLASS,
+                        ),
+                        selected = uiStyle,
+                        onSelect = viewModel::setUiStyle,
                     )
                     HorizontalDivider(color = NitronTheme.colors.border)
                     Text(strings.language, style = MaterialTheme.typography.labelLarge, color = NitronTheme.colors.textSecondary)

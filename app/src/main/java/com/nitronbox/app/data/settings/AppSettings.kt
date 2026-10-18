@@ -25,6 +25,9 @@ data class ActiveModel(
 
 enum class ThemeModeSetting { SYSTEM, LIGHT, DARK }
 
+/** Interface surface style: the classic flat look or the Liquid Glass material. */
+enum class UiStyleSetting { FLAT, LIQUID_GLASS }
+
 enum class LanguageSetting { SYSTEM, ENGLISH, RUSSIAN }
 
 enum class WallpaperPreset { NONE, MIDNIGHT, AURORA, SUNSET, GRAPHITE, LOGO, CUSTOM }
@@ -70,6 +73,12 @@ class AppSettings(private val context: Context) {
         } ?: WallpaperPreset.LOGO
     }
 
+    val uiStyle: Flow<UiStyleSetting> = context.dataStore.data.map { prefs ->
+        prefs[KEY_UI_STYLE]?.let { stored ->
+            UiStyleSetting.entries.firstOrNull { it.name == stored }
+        } ?: UiStyleSetting.FLAT
+    }
+
     val wallpaperImageUri: Flow<String?> = context.dataStore.data.map { it[KEY_WALLPAPER_URI] }
 
     suspend fun setActiveWorkspace(id: String?) = context.dataStore.edit { prefs ->
@@ -102,6 +111,10 @@ class AppSettings(private val context: Context) {
 
     suspend fun setWallpaper(preset: WallpaperPreset) = context.dataStore.edit { prefs ->
         prefs[KEY_WALLPAPER] = preset.name
+    }
+
+    suspend fun setUiStyle(style: UiStyleSetting) = context.dataStore.edit { prefs ->
+        prefs[KEY_UI_STYLE] = style.name
     }
 
     suspend fun setWallpaperImageUri(uri: String?) = context.dataStore.edit { prefs ->
@@ -190,6 +203,7 @@ class AppSettings(private val context: Context) {
         val KEY_THEME_MODE = stringPreferencesKey("theme_mode")
         val KEY_LANGUAGE = stringPreferencesKey("language")
         val KEY_WALLPAPER = stringPreferencesKey("wallpaper_preset")
+        val KEY_UI_STYLE = stringPreferencesKey("ui_style")
         val KEY_WALLPAPER_URI = stringPreferencesKey("wallpaper_image_uri")
         val KEY_DEFAULTS_MIGRATED = stringPreferencesKey("legacy_defaults_migrated")
         val KEY_CREATOR_FOLDER = stringPreferencesKey("creator_folder_uri")

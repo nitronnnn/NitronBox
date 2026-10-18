@@ -59,6 +59,14 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
         viewModelScope.launch { container.appSettings.setThemeMode(mode) }
     }
 
+    val uiStyle: StateFlow<com.nitronbox.app.data.settings.UiStyleSetting> =
+        container.appSettings.uiStyle
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), com.nitronbox.app.data.settings.UiStyleSetting.FLAT)
+
+    fun setUiStyle(style: com.nitronbox.app.data.settings.UiStyleSetting) {
+        viewModelScope.launch { container.appSettings.setUiStyle(style) }
+    }
+
     val skills: StateFlow<List<com.nitronbox.app.data.settings.Skill>> =
         container.appSettings.skills
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
