@@ -12,6 +12,10 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -57,7 +61,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -77,12 +86,17 @@ import com.nitronbox.app.ui.theme.WallpaperBackdrop
 import com.nitronbox.app.ui.theme.glassMenu
 import com.nitronbox.app.ui.theme.glassMenuColor
 import com.nitronbox.app.ui.theme.glassOrSurface
+import com.nitronbox.app.ui.theme.liquidDividerColor
+import com.nitronbox.app.ui.theme.liquidTextSecondary
+import com.nitronbox.app.ui.theme.liquidTextTertiary
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import androidx.compose.material3.Switch
 import com.nitronbox.app.ui.components.AnimatedSegmented
 import com.nitronbox.app.ui.components.NitronBottomPanel
 import com.nitronbox.app.ui.theme.LocalHazeState
+import dev.chrisbanes.haze.HazeProgressive
+import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
 import com.nitronbox.app.ui.components.NitronCenterDialog
 import com.nitronbox.app.ui.components.TextButtonFlat
@@ -205,13 +219,30 @@ fun SettingsScreen(
                     Text(
                         "One tap to add · ",
                         style = MaterialTheme.typography.labelMedium,
-                        color = NitronTheme.colors.textTertiary,
+                        color = liquidTextTertiary,
                     )
                     if (busy) CircularProgressIndicator(modifier = Modifier.height(16.dp), strokeWidth = 2.dp)
                 }
             }
             item {
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                // Edge fade: chips dissolve at the left/right edges instead of hard-cutting.
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier
+                        .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+                        .drawWithContent {
+                            drawContent()
+                            drawRect(
+                                brush = Brush.horizontalGradient(
+                                    0f to Color.Transparent,
+                                    0.05f to Color.Black,
+                                    0.95f to Color.Black,
+                                    1f to Color.Transparent,
+                                ),
+                                blendMode = BlendMode.DstIn,
+                            )
+                        },
+                ) {
                     items(PROVIDER_TEMPLATES) { template ->
                         Text(
                             "+ ${template.name}",
@@ -230,7 +261,7 @@ fun SettingsScreen(
                     Text(
                         strings.noProvidersHint,
                         style = MaterialTheme.typography.bodyMedium,
-                        color = NitronTheme.colors.textSecondary,
+                        color = liquidTextSecondary,
                     )
                 }
             }
@@ -246,10 +277,10 @@ fun SettingsScreen(
                 Text(
                     strings.providerHint,
                     style = MaterialTheme.typography.bodySmall,
-                    color = NitronTheme.colors.textTertiary,
+                    color = liquidTextTertiary,
                 )
             }
-            item { HorizontalDivider(color = NitronTheme.colors.border) }
+            item { HorizontalDivider(color = liquidDividerColor) }
             item {
                 Text(
                     strings.appearance,
@@ -265,7 +296,7 @@ fun SettingsScreen(
                         .padding(14.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    Text(strings.theme, style = MaterialTheme.typography.labelLarge, color = NitronTheme.colors.textSecondary)
+                    Text(strings.theme, style = MaterialTheme.typography.labelLarge, color = liquidTextSecondary)
                     SegmentedSelector(
                         options = listOf(
                             strings.themeSystem to ThemeModeSetting.SYSTEM,
@@ -275,8 +306,8 @@ fun SettingsScreen(
                         selected = themeMode,
                         onSelect = viewModel::setThemeMode,
                     )
-                    HorizontalDivider(color = NitronTheme.colors.border)
-                    Text(strings.uiStyle, style = MaterialTheme.typography.labelLarge, color = NitronTheme.colors.textSecondary)
+                    HorizontalDivider(color = liquidDividerColor)
+                    Text(strings.uiStyle, style = MaterialTheme.typography.labelLarge, color = liquidTextSecondary)
                     SegmentedSelector(
                         options = listOf(
                             strings.uiStyleFlat to UiStyleSetting.FLAT,
@@ -285,8 +316,8 @@ fun SettingsScreen(
                         selected = uiStyle,
                         onSelect = viewModel::setUiStyle,
                     )
-                    HorizontalDivider(color = NitronTheme.colors.border)
-                    Text(strings.language, style = MaterialTheme.typography.labelLarge, color = NitronTheme.colors.textSecondary)
+                    HorizontalDivider(color = liquidDividerColor)
+                    Text(strings.language, style = MaterialTheme.typography.labelLarge, color = liquidTextSecondary)
                     SegmentedSelector(
                         options = listOf(
                             strings.languageSystem to LanguageSetting.SYSTEM,
@@ -296,7 +327,7 @@ fun SettingsScreen(
                         selected = language,
                         onSelect = viewModel::setLanguage,
                     )
-                    HorizontalDivider(color = NitronTheme.colors.border)
+                    HorizontalDivider(color = liquidDividerColor)
                     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                         Text(
                             strings.blurBackground,
@@ -311,7 +342,7 @@ fun SettingsScreen(
                             Text(
                                 strings.strength + ": " + blurStrength.toInt(),
                                 style = MaterialTheme.typography.labelMedium,
-                                color = NitronTheme.colors.textSecondary,
+                                color = liquidTextSecondary,
                             )
                             com.nitronbox.app.ui.components.NitronSlider(
                                 value = blurStrength,
@@ -334,7 +365,7 @@ fun SettingsScreen(
                             Text(
                                 strings.panelStrength + ": " + panelBlurStrength.toInt(),
                                 style = MaterialTheme.typography.labelMedium,
-                                color = NitronTheme.colors.textSecondary,
+                                color = liquidTextSecondary,
                             )
                             com.nitronbox.app.ui.components.NitronSlider(
                                 value = panelBlurStrength,
@@ -343,7 +374,7 @@ fun SettingsScreen(
                             )
                         }
                     }
-                    HorizontalDivider(color = NitronTheme.colors.border)
+                    HorizontalDivider(color = liquidDividerColor)
                     Row(
                         Modifier
                             .fillMaxWidth()
@@ -366,13 +397,13 @@ fun SettingsScreen(
                         Icon(
                             Icons.Rounded.ExpandMore,
                             null,
-                            tint = NitronTheme.colors.textSecondary,
+                            tint = liquidTextSecondary,
                             modifier = Modifier.padding(start = 6.dp),
                         )
                     }
                 }
             }
-            item { HorizontalDivider(color = NitronTheme.colors.border) }
+            item { HorizontalDivider(color = liquidDividerColor) }
             item {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
@@ -403,7 +434,7 @@ fun SettingsScreen(
                         Text(
                             skill.name.ifBlank { "\u2014" },
                             style = MaterialTheme.typography.titleSmall,
-                            color = if (skill.enabled) NitronTheme.colors.textPrimary else NitronTheme.colors.textTertiary,
+                            color = if (skill.enabled) NitronTheme.colors.textPrimary else liquidTextTertiary,
                             modifier = Modifier.weight(1f),
                         )
                         Switch(checked = skill.enabled, onCheckedChange = { viewModel.toggleSkill(skill) })
@@ -411,13 +442,13 @@ fun SettingsScreen(
                     Text(
                         skill.prompt,
                         style = MaterialTheme.typography.labelSmall,
-                        color = NitronTheme.colors.textTertiary,
+                        color = liquidTextTertiary,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
             }
-            item { HorizontalDivider(color = NitronTheme.colors.border) }
+            item { HorizontalDivider(color = liquidDividerColor) }
             item {
                 Text(
                     strings.workspace,
@@ -436,6 +467,35 @@ fun SettingsScreen(
             item { Spacer(Modifier.height(24.dp)) }
         }
     }
+
+    // Progressive blur at the top (under the app bar) and bottom edge, mirroring the chat:
+    // list content dissolves instead of hard-cutting at the screen edges.
+    Box(
+        Modifier
+            .align(Alignment.TopCenter)
+            .fillMaxWidth()
+            .height(WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 104.dp)
+            .hazeEffect(hazeState) {
+                backgroundColor = Color.Transparent
+                tints = emptyList()
+                this.blurRadius = 18.dp
+                noiseFactor = 0f
+                progressive = HazeProgressive.verticalGradient(startIntensity = 1f, endIntensity = 0f)
+            },
+    )
+    Box(
+        Modifier
+            .align(Alignment.BottomCenter)
+            .fillMaxWidth()
+            .height(WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 56.dp)
+            .hazeEffect(hazeState) {
+                backgroundColor = Color.Transparent
+                tints = emptyList()
+                this.blurRadius = 18.dp
+                noiseFactor = 0f
+                progressive = HazeProgressive.verticalGradient(startIntensity = 0f, endIntensity = 1f)
+            },
+    )
 
     if (prefill != null || editingProvider != null) {
         val template = prefill
@@ -496,7 +556,7 @@ fun SettingsScreen(
             Column(Modifier.padding(18.dp).fillMaxWidth(0.86f)) {
                 Text(strings.delete, style = MaterialTheme.typography.titleMedium, color = NitronTheme.colors.textPrimary)
                 Spacer(Modifier.height(8.dp))
-                Text(profile.displayName, style = MaterialTheme.typography.bodyMedium, color = NitronTheme.colors.textSecondary)
+                Text(profile.displayName, style = MaterialTheme.typography.bodyMedium, color = liquidTextSecondary)
                 Spacer(Modifier.height(14.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.align(Alignment.End)) {
                     TextButtonFlat(strings.cancel) { deletingProvider = null }
@@ -550,7 +610,7 @@ private fun SkillInstallPanel(
         Text(
             "SKILL.md / README.md из репозитория станет инструкцией для модели",
             style = MaterialTheme.typography.labelSmall,
-            color = NitronTheme.colors.textTertiary,
+            color = liquidTextTertiary,
         )
         Button(
             onClick = { onInstall(url) },
@@ -682,7 +742,7 @@ private fun WallpaperPanel(
                         Text(
                             strings.wallpaperPhoto,
                             style = MaterialTheme.typography.labelSmall,
-                            color = NitronTheme.colors.textSecondary,
+                            color = liquidTextSecondary,
                         )
                     }
                 }
@@ -760,7 +820,7 @@ private fun ProviderCard(
                 Text(
                     "${profile.protocol.friendlyName()}  ·  ${profile.baseUrl}",
                     style = MaterialTheme.typography.labelSmall,
-                    color = NitronTheme.colors.textSecondary,
+                    color = liquidTextSecondary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -768,7 +828,7 @@ private fun ProviderCard(
             when {
                 health?.reachable == true -> Text(strings.online, style = MaterialTheme.typography.labelMedium, color = NitronTheme.colors.accent)
                 health?.reachable == false -> Text(strings.offline, style = MaterialTheme.typography.labelMedium, color = NitronTheme.colors.destructive)
-                else -> Text(strings.untested, style = MaterialTheme.typography.labelMedium, color = NitronTheme.colors.textTertiary)
+                else -> Text(strings.untested, style = MaterialTheme.typography.labelMedium, color = liquidTextTertiary)
             }
         }
         AnimatedVisibility(models.isNotEmpty()) {
@@ -777,7 +837,7 @@ private fun ProviderCard(
                 Text(
                     strings.modelsDiscovered(models.size),
                     style = MaterialTheme.typography.labelSmall,
-                    color = NitronTheme.colors.textTertiary,
+                    color = liquidTextTertiary,
                 )
             }
         }
@@ -820,7 +880,7 @@ private fun ProviderEditorSheet(
                 style = MaterialTheme.typography.headlineSmall,
                 color = NitronTheme.colors.textPrimary,
             )
-            Text(strings.protocol, style = MaterialTheme.typography.labelLarge, color = NitronTheme.colors.textSecondary)
+            Text(strings.protocol, style = MaterialTheme.typography.labelLarge, color = liquidTextSecondary)
             SegmentedSelector(
                 options = ProviderProtocol.entries.map { it.friendlyName() to it },
                 selected = protocol,
@@ -930,7 +990,7 @@ private fun WorkspaceEditor(
             minLines = 3,
             modifier = Modifier.fillMaxWidth(),
         )
-        Text(strings.temperature(temperature), style = MaterialTheme.typography.labelMedium, color = NitronTheme.colors.textSecondary)
+        Text(strings.temperature(temperature), style = MaterialTheme.typography.labelMedium, color = liquidTextSecondary)
         com.nitronbox.app.ui.components.NitronSlider(
             value = temperature,
             onValueChange = { temperature = it },
@@ -944,7 +1004,7 @@ private fun WorkspaceEditor(
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
         )
-        HorizontalDivider(color = NitronTheme.colors.border)
+        HorizontalDivider(color = liquidDividerColor)
         Text(strings.contextWindow, style = MaterialTheme.typography.titleSmall, color = NitronTheme.colors.textPrimary)
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             OutlinedTextField(
@@ -971,7 +1031,7 @@ private fun WorkspaceEditor(
                 label = { Text(strings.overflowStrategy) },
                 trailingIcon = {
                     IconButton(onClick = { strategyMenuOpen = true }) {
-                        Icon(Icons.Rounded.ExpandMore, null, tint = NitronTheme.colors.textSecondary)
+                        Icon(Icons.Rounded.ExpandMore, null, tint = liquidTextSecondary)
                     }
                 },
                 modifier = Modifier.fillMaxWidth(),

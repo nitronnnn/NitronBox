@@ -47,7 +47,8 @@ import com.nitronbox.app.ui.theme.NitronTheme
 import com.nitronbox.app.ui.theme.SurfaceLevel
 import com.nitronbox.app.ui.theme.glassMenu
 import com.nitronbox.app.ui.theme.glassMenuColor
-import com.nitronbox.app.ui.theme.nitronSurface
+import com.nitronbox.app.ui.theme.glassOrSurface
+import com.nitronbox.app.ui.theme.liquidTextTertiary
 import com.nitronbox.app.ui.theme.pressableRipple
 import java.text.DateFormat
 import java.util.Date
@@ -102,7 +103,7 @@ fun ConversationsPanel(
             Column(
                 Modifier
                     .fillMaxWidth()
-                    .nitronSurface(SurfaceLevel.Raised, NitronTheme.shapes.medium)
+                    .glassOrSurface(SurfaceLevel.Raised, NitronTheme.shapes.medium)
                     .padding(10.dp),
             ) {
                 // Every added folder is listed; the selected one is used for new chats.
@@ -118,7 +119,7 @@ fun ConversationsPanel(
                         Icon(
                             Icons.Rounded.Folder,
                             null,
-                            tint = if (selected) NitronTheme.colors.accent else NitronTheme.colors.textTertiary,
+                            tint = if (selected) NitronTheme.colors.accent else liquidTextTertiary,
                             modifier = Modifier.height(15.dp),
                         )
                         Spacer(Modifier.padding(3.dp))
@@ -182,7 +183,7 @@ fun ConversationsPanel(
             Text(
                 strings.noFolderHint,
                 style = MaterialTheme.typography.bodySmall,
-                color = NitronTheme.colors.textTertiary,
+                color = liquidTextTertiary,
             )
         }
         LazyColumn(verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -193,7 +194,7 @@ fun ConversationsPanel(
                     Modifier
                         .fillMaxWidth()
                         .animateItem()
-                        .nitronSurface(
+                        .glassOrSurface(
                             if (selected) SurfaceLevel.Muted else SurfaceLevel.Base,
                             NitronTheme.shapes.small,
                         )
@@ -215,7 +216,7 @@ fun ConversationsPanel(
                             DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT)
                                 .format(Date(conversation.updatedAtEpochMillis)),
                             style = MaterialTheme.typography.labelSmall,
-                            color = NitronTheme.colors.textTertiary,
+                            color = liquidTextTertiary,
                         )
                     }
                     Box {
@@ -223,7 +224,7 @@ fun ConversationsPanel(
                             Icon(
                                 Icons.Rounded.MoreVert,
                                 strings.conversationActions,
-                                tint = NitronTheme.colors.textTertiary,
+                                tint = liquidTextTertiary,
                                 modifier = Modifier.height(16.dp),
                             )
                         }

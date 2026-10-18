@@ -124,6 +124,8 @@ import com.nitronbox.app.ui.theme.glassMenu
 import com.nitronbox.app.ui.theme.glassMenuColor
 import com.nitronbox.app.ui.theme.liquidGlassActive
 import com.nitronbox.app.ui.theme.liquidGlassPanel
+import com.nitronbox.app.ui.theme.liquidTextSecondary
+import com.nitronbox.app.ui.theme.liquidTextTertiary
 import com.nitronbox.app.ui.theme.nitronSurface
 import com.nitronbox.app.ui.components.FrostSurface
 import com.nitronbox.app.ui.components.frostPanel
@@ -320,6 +322,23 @@ fun ChatScreen(
                         },
                 )
 
+                // Mirror strip at the bottom so messages dissolve under the composer too.
+                Box(
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .height(
+                            WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 170.dp,
+                        )
+                        .hazeEffect(hazeState) {
+                            backgroundColor = Color.Transparent
+                            tints = emptyList()
+                            this.blurRadius = 18.dp
+                            noiseFactor = 0f
+                            progressive = HazeProgressive.verticalGradient(startIntensity = 0f, endIntensity = 1f)
+                        },
+                )
+
                 ChatHeader(
                     title = conversation?.title ?: workspace?.name ?: "NitronBox",
                     modelLabel = model?.displayName ?: strings.noModelSelected,
@@ -443,7 +462,7 @@ fun ChatScreen(
                         Text(
                             strings.deleteConversationBody(conversation.title),
                             style = MaterialTheme.typography.bodyMedium,
-                            color = NitronTheme.colors.textSecondary,
+                            color = liquidTextSecondary,
                         )
                         Spacer(Modifier.height(14.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.align(Alignment.End)) {
@@ -588,7 +607,7 @@ private fun ChatHeader(
             Text(
                 modelLabel,
                 style = MaterialTheme.typography.labelMedium,
-                color = NitronTheme.colors.textSecondary,
+                color = liquidTextSecondary,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -631,7 +650,7 @@ private fun WelcomeCard(
         Text(
             strings.welcomeBody(workspaceName),
             style = MaterialTheme.typography.bodyMedium,
-            color = NitronTheme.colors.textSecondary,
+            color = liquidTextSecondary,
         )
         AnimatedVisibility(!modelConfigured, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
             Column {
@@ -639,7 +658,7 @@ private fun WelcomeCard(
                 Text(
                     strings.welcomeNoModel,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = NitronTheme.colors.textSecondary,
+                    color = liquidTextSecondary,
                 )
                 Spacer(Modifier.height(10.dp))
                 Text(
@@ -721,14 +740,14 @@ private fun MessageBubble(
                         Text(
                             (if (reasoningOpen) "▾ " else "▸ ") + strings.thinking,
                             style = MaterialTheme.typography.labelMedium,
-                            color = NitronTheme.colors.textTertiary,
+                            color = liquidTextTertiary,
                         )
                     }
                     AnimatedVisibility(visible = reasoningOpen) {
                         Text(
                             message.reasoning!!,
                             style = MaterialTheme.typography.bodySmall.copy(fontStyle = androidx.compose.ui.text.font.FontStyle.Italic),
-                            color = NitronTheme.colors.textSecondary,
+                            color = liquidTextSecondary,
                             modifier = Modifier.padding(top = 6.dp, start = 2.dp),
                         )
                     }
@@ -803,7 +822,7 @@ private fun MessageBubble(
                             Text(
                                 "${attachment.displayName}  ·  ${formatBytes(attachment.byteSize)}",
                                 style = MaterialTheme.typography.labelSmall,
-                                color = NitronTheme.colors.textTertiary,
+                                color = liquidTextTertiary,
                             )
                         } else {
                             AttachmentChip(attachment.displayName, attachment.byteSize) {
@@ -818,7 +837,7 @@ private fun MessageBubble(
                 Text(
                     message.errorText,
                     style = MaterialTheme.typography.bodySmall,
-                    color = NitronTheme.colors.textSecondary,
+                    color = liquidTextSecondary,
                 )
             }
             if (message.status != MessageStatus.STREAMING) {
@@ -828,7 +847,7 @@ private fun MessageBubble(
                         Text(
                             stats,
                             style = MaterialTheme.typography.labelSmall,
-                            color = NitronTheme.colors.textTertiary,
+                            color = liquidTextTertiary,
                             modifier = Modifier.weight(1f),
                         )
                     } else {
@@ -872,7 +891,7 @@ private fun MessageBubble(
                             Icon(
                                 Icons.Rounded.MoreVert,
                                 strings.conversationActions,
-                                tint = NitronTheme.colors.textTertiary,
+                                tint = liquidTextTertiary,
                                 modifier = Modifier.size(16.dp),
                             )
                         }
@@ -913,7 +932,7 @@ private fun StreamingDots(label: String) {
         Box(Modifier.padding(end = 5.dp).size(7.dp).background(NitronTheme.colors.accent.copy(alpha = alpha), CircleShape))
         Box(Modifier.padding(end = 5.dp).size(7.dp).background(NitronTheme.colors.accent.copy(alpha = alpha * 0.7f), CircleShape))
         Box(Modifier.padding(end = 8.dp).size(7.dp).background(NitronTheme.colors.accent.copy(alpha = alpha * 0.4f), CircleShape))
-        Text(label, style = MaterialTheme.typography.labelMedium, color = NitronTheme.colors.textSecondary)
+        Text(label, style = MaterialTheme.typography.labelMedium, color = liquidTextSecondary)
     }
 }
 
@@ -923,7 +942,7 @@ private fun ContextRing(progress: Float, modifier: Modifier = Modifier) {
     val ringColor = when {
         progress > 0.85f -> NitronTheme.colors.destructive
         progress > 0.6f -> NitronTheme.colors.accent
-        else -> NitronTheme.colors.textTertiary
+        else -> liquidTextTertiary
     }
     Canvas(modifier.size(24.dp)) {
         val stroke = Stroke(width = 2.5.dp.toPx(), cap = StrokeCap.Round)
@@ -990,7 +1009,7 @@ private fun Composer(
         TextField(
             value = draft,
             onValueChange = onDraftChange,
-            placeholder = { Text(strings.messageYourWorkspace, color = NitronTheme.colors.textSecondary) },
+            placeholder = { Text(strings.messageYourWorkspace, color = liquidTextSecondary) },
             modifier = Modifier.fillMaxWidth(),
             textStyle = MaterialTheme.typography.bodyLarge.copy(color = NitronTheme.colors.textPrimary),
             minLines = 1,
@@ -1008,7 +1027,7 @@ private fun Composer(
                 Icon(
                     Icons.Rounded.AttachFile,
                     strings.attachFile,
-                    tint = NitronTheme.colors.textSecondary,
+                    tint = liquidTextSecondary,
                     modifier = Modifier.size(20.dp),
                 )
             }
@@ -1039,7 +1058,7 @@ private fun Composer(
                 Icon(
                     Icons.Rounded.ExpandMore,
                     null,
-                    tint = NitronTheme.colors.textTertiary,
+                    tint = liquidTextTertiary,
                     modifier = Modifier.size(15.dp),
                 )
             }
@@ -1061,7 +1080,7 @@ private fun Composer(
                 Icon(
                     if (streaming) Icons.Rounded.Stop else Icons.Rounded.ArrowUpward,
                     if (streaming) strings.stopGenerating else strings.send,
-                    tint = if (streaming || canSend) NitronTheme.colors.onPrimary else NitronTheme.colors.textTertiary,
+                    tint = if (streaming || canSend) NitronTheme.colors.onPrimary else liquidTextTertiary,
                     modifier = Modifier.size(21.dp),
                 )
             }
@@ -1088,12 +1107,12 @@ fun AttachmentChip(name: String, byteSize: Long, onRemove: (() -> Unit)?) {
             Text(
                 formatBytes(byteSize),
                 style = MaterialTheme.typography.labelSmall,
-                color = NitronTheme.colors.textTertiary,
+                color = liquidTextTertiary,
             )
         }
         if (onRemove != null) {
             IconButton(onClick = onRemove, modifier = Modifier.size(26.dp)) {
-                Icon(Icons.Rounded.Close, "Remove", tint = NitronTheme.colors.textSecondary, modifier = Modifier.size(15.dp))
+                Icon(Icons.Rounded.Close, "Remove", tint = liquidTextSecondary, modifier = Modifier.size(15.dp))
             }
         }
     }
