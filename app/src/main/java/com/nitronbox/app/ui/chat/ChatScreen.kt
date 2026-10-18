@@ -121,6 +121,7 @@ import com.nitronbox.app.ui.theme.NitronTheme
 import com.nitronbox.app.ui.theme.SurfaceLevel
 import com.nitronbox.app.ui.theme.WallpaperBackdrop
 import com.nitronbox.app.ui.theme.liquidGlassActive
+import com.nitronbox.app.ui.theme.liquidGlassPanel
 import com.nitronbox.app.ui.theme.nitronSurface
 import com.nitronbox.app.ui.components.FrostSurface
 import com.nitronbox.app.ui.components.frostPanel
@@ -586,10 +587,17 @@ private fun WelcomeCard(
     onConfigureModels: () -> Unit,
 ) {
     val strings = LocalStrings.current
+    // The card lives inside the recorded content layer, so in Liquid Glass mode it must sample
+    // the wallpaper layer; sampling the content layer would make the render tree self-recursive
+    // and overflow the RenderThread stack (SIGSEGV in RenderNode::prepareTreeImpl).
+    val wallpaperGlass = LocalLiquidWallpaperBackdrop.current
     Column(
         Modifier
             .fillMaxWidth()
-            .frostPanel(NitronTheme.shapes.large)
+            .then(
+                if (wallpaperGlass != null) Modifier.liquidGlassPanel(wallpaperGlass, NitronTheme.shapes.large)
+                else Modifier.frostPanel(NitronTheme.shapes.large),
+            )
             .padding(20.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
